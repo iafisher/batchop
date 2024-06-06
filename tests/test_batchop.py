@@ -2,21 +2,9 @@ import decimal
 import unittest
 from typing import Any, List, Optional
 
-from batchop.batchop import (
-    FilterIsFile,
-    FilterIsFolder,
-    PAnyLit,
-    PDecimal,
-    PLit,
-    PNot,
-    POpt,
-    PSizeUnit,
-    PString,
-    PhraseMatch,
-    parse_command,
-    tokenize,
-    try_phrase_match,
-)
+from batchop import patterns
+from batchop.filters import FilterIsFile, FilterIsFolder
+from batchop.parsing import PhraseMatch, parse_command, tokenize, try_phrase_match
 
 
 class TestCommandParsing(unittest.TestCase):
@@ -36,7 +24,7 @@ class TestCommandParsing(unittest.TestCase):
 
 class TestPatternMatching(unittest.TestCase):
     def test_match_literal(self):
-        pattern = [PLit("is")]
+        pattern = [patterns.Lit("is")]
         m = try_phrase_match(pattern, ["is"])
         self.assert_match(m)
 
@@ -44,7 +32,7 @@ class TestPatternMatching(unittest.TestCase):
         self.assert_no_match(m)
 
     def test_match_optional(self):
-        pattern = [POpt(PLit("an"))]
+        pattern = [patterns.Opt(patterns.Lit("an"))]
         m = try_phrase_match(pattern, ["folder"])
         self.assert_match(m)
 
@@ -55,7 +43,7 @@ class TestPatternMatching(unittest.TestCase):
         self.assert_match(m)
 
     def test_match_string(self):
-        pattern = [PLit("named"), PString()]
+        pattern = [patterns.Lit("named"), patterns.String()]
         m = try_phrase_match(pattern, ["named", "test.txt"])
         self.assert_match(m, captures=["test.txt"])
 
@@ -63,7 +51,7 @@ class TestPatternMatching(unittest.TestCase):
         self.assert_no_match(m)
 
     def test_match_any_lit(self):
-        pattern = [PAnyLit(["gt", ">"])]
+        pattern = [patterns.AnyLit(["gt", ">"])]
         m = try_phrase_match(pattern, ["gt"])
         self.assert_match(m)
 
@@ -74,7 +62,12 @@ class TestPatternMatching(unittest.TestCase):
         self.assert_no_match(m)
 
     def test_match_complex(self):
-        pattern = [POpt(PLit("is")), PNot(), PDecimal(), PSizeUnit()]
+        pattern = [
+            patterns.Opt(patterns.Lit("is")),
+            patterns.Not(),
+            patterns.Decimal(),
+            patterns.SizeUnit(),
+        ]
         m = try_phrase_match(pattern, ["is", "10.7", "gigabytes"])
         self.assert_match(m, [decimal.Decimal("10.7"), 1_000_000_000])
 

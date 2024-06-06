@@ -28,3 +28,20 @@ repos:
     rev: 24.3.0
     hooks:
     -   id: black
+
+-   repo: local
+    hooks:
+    -   id: mypy
+        name: mypy
+        description: 'Run mypy on the package'
+        entry: mypy
+        language: system
+        pass_filenames: false
+        args: [batchop]
+    -   id: unittests
+        name: unittests
+        description: 'Run unit tests'
+        entry: poetry
+        language: system
+        pass_filenames: false
+        args: [run, pytest]
