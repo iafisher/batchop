@@ -1,0 +1,27 @@
+Optimization: use Path.iterdir() instead of Path.glob("*")
+Time: 2024-06-06 12:14 PM
+Command: python3 batchop.py -d ~/Code/research count files that are not hidden
+Result: 236151
+Before:
+  1.28s user 2.53s system 96% cpu 3.944 total
+  1.28s user 2.46s system 97% cpu 3.826 total
+  1.28s user 2.43s system 97% cpu 3.796 total
+After:
+  0.97s user 2.40s system 97% cpu 3.462 total
+  0.96s user 2.39s system 97% cpu 3.436 total
+  0.97s user 2.39s system 97% cpu 3.440 total
+Verdict: small improvement
+
+Optimization: use a specialized routine for `count` instead of piggybacking on `list`
+Time: 2024-06-06 12:14 PM
+Command: python3 batchop.py -d ~/Code/research count files that are not hidden
+Result: 236150
+Before:
+  1.28s user 2.53s system 96% cpu 3.944 total
+  1.28s user 2.46s system 97% cpu 3.826 total
+  1.28s user 2.43s system 97% cpu 3.796 total
+After:
+  1.26s user 2.45s system 97% cpu 3.796 total
+  1.26s user 2.42s system 97% cpu 3.765 total
+  1.28s user 2.52s system 97% cpu 3.891 total
+Verdict: no significant improvement
