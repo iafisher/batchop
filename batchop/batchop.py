@@ -43,21 +43,9 @@ TODO: profiling + optimization
   idea: walk the tree, filter functions can prevent sub-traversal as well as
         excluding individual paths
 TODO: adjectives
-
-Profiling:
-
-    before changing filter to tree-walking:
-
-        5.97s user 6.29s system 88% cpu 13.838 total
-        6.13s user 7.23s system 82% cpu 16.116 total
-
-    after changing filter:
-
-        3.31s user 7.44s system 81% cpu 13.131 total
-        3.41s user 8.11s system 79% cpu 14.537 total
-
 TODO: 'is not in __pycache__' gives different results before and after optimization
 TODO: support absolute/relative paths for patterns
+TODO: symlinks seem not to be handled correctly
 
 """
 
@@ -185,15 +173,43 @@ class BatchOp:
         return sum(1 for _ in fileset.resolve(self.root))
 
     def delete(self, fileset: FileSet) -> None:
+        # TODO: avoid computing entire file-set twice?
+        size = fileset.calculate_size(self.root)
+        nfiles = size.file_count
+        ndirs = size.directory_count
+        nbytes = size.size_in_bytes
+        # TODO: don't print counts if 0
+        # TODO: human-readable size units
+        # TODO: option to list files
+        prompt = (
+            f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'folder')} "
+            + f"totaling {plural(nbytes, 'byte')}? "
+        )
+        if not confirm(prompt):
+            print("Aborted.")
+            return
+
         # TODO: don't remove files that are in a directory that will be removed
         # TODO: don't use -rf except for directories
         # TODO: pass paths to `rm` in batches
         for p in fileset.resolve(self.root):
-            sh(["rm", "-rf", str(p)])
+            # TODO: enable rm
+            sh(["echo", "rm", "-rf", str(p)])
 
 
 def sh(args: List[str]) -> None:
     subprocess.run(args, capture_output=True, check=True)
+
+
+def confirm(prompt: str) -> bool:
+    while True:
+        r = input(prompt).strip().lower()
+        if r == "yes" or r == "y":
+            return True
+        elif r == "no" or r == "n":
+            return False
+        else:
+            print("Please enter 'yes' or 'no'.")
 
 
 def path_or_default(p: Optional[PathLike]) -> Path:

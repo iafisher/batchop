@@ -8,6 +8,13 @@ from .filters import Filter
 
 
 @dataclass
+class FileSetSize:
+    file_count: int
+    directory_count: int
+    size_in_bytes: int
+
+
+@dataclass
 class FileSet:
     filters: List[Filter] = dataclasses.field(default_factory=list)
 
@@ -31,6 +38,18 @@ class FileSet:
             if should_recurse and item.is_dir():
                 for child in item.iterdir():
                     stack.append(child)
+
+    def calculate_size(self, root: Path) -> FileSetSize:
+        r = FileSetSize(file_count=0, directory_count=0, size_in_bytes=0)
+        for p in self.resolve(root):
+            if p.is_dir():
+                r.directory_count += 1
+            else:
+                # TODO: special files?
+                r.file_count += 1
+                r.size_in_bytes += p.stat().st_size
+
+        return r
 
     def pop(self) -> None:
         self.filters.pop()
