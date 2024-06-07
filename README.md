@@ -16,3 +16,7 @@ Publish to PyPI:
 $ poetry build
 $ poetry publish
 ```
+
+## Prior art
+- [zfind](https://github.com/laktak/zfind) and [fselect](https://github.com/jhspetersson/fselect)
+  similarly use a human-readable syntax to find files.

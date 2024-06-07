@@ -21,9 +21,9 @@ class FileSet:
         while stack:
             item = stack.pop()
             # TODO: terminate filter application early if possible
-            results = [f.test(item) for f in self.filters]
-            should_include = all(r.should_include for r in results)
-            should_recurse = all(r.should_recurse for r in results)
+            results = [filters.expand_result(f.test(item)) for f in self.filters]
+            should_include = all(include_self for include_self, _ in results)
+            should_recurse = all(include_children for _, include_children in results)
 
             if should_include:
                 yield item

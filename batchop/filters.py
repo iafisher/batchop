@@ -3,17 +3,23 @@ import decimal
 import fnmatch
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Tuple, Union
 
 
-@dataclass
-class FilterResult:
-    should_include: bool
-    should_recurse: bool = True
+# if tuple, interpreted as (include_self, include_children)
+Result = Union[bool, Tuple[bool, bool]]
+
+
+def expand_result(r: Result) -> Tuple[bool, bool]:
+    if isinstance(r, tuple):
+        return r
+    else:
+        return r, True
 
 
 class Filter(abc.ABC):
     @abc.abstractmethod
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         pass
 
     def negate(self) -> "Filter":
@@ -26,12 +32,14 @@ class Filter(abc.ABC):
 class FilterNegated(Filter):
     inner: Filter
 
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         r = self.inner.test(p)
-        # TODO: is it always right to pass should_recurse through unchanged?
-        return FilterResult(
-            should_include=not r.should_include, should_recurse=r.should_recurse
-        )
+        if isinstance(r, tuple):
+            # TODO: is it always right to pass include_children through unchanged?
+            include_self, include_children = r
+            return not include_self, include_children
+        else:
+            return not r
 
     def __str__(self) -> str:
         return f"not ({self.inner})"
@@ -39,8 +47,8 @@ class FilterNegated(Filter):
 
 @dataclass
 class FilterIsFolder(Filter):
-    def test(self, p: Path) -> FilterResult:
-        return FilterResult(p.is_dir())
+    def test(self, p: Path) -> Result:
+        return p.is_dir()
 
     def __str__(self) -> str:
         return "is folder"
@@ -48,8 +56,8 @@ class FilterIsFolder(Filter):
 
 @dataclass
 class FilterIsFile(Filter):
-    def test(self, p: Path) -> FilterResult:
-        return FilterResult(p.is_file())
+    def test(self, p: Path) -> Result:
+        return p.is_file()
 
     def __str__(self) -> str:
         return "is file"
@@ -57,13 +65,11 @@ class FilterIsFile(Filter):
 
 @dataclass
 class FilterIsEmpty(Filter):
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         if p.is_dir():
-            r = any(p.iterdir())
+            return any(p.iterdir())
         else:
-            r = p.stat().st_size == 0
-
-        return FilterResult(r)
+            return p.stat().st_size == 0
 
     def __str__(self) -> str:
         return "is empty"
@@ -73,10 +79,9 @@ class FilterIsEmpty(Filter):
 class FilterIsNamed(Filter):
     pattern: str
 
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         # TODO: case-insensitive file systems?
-        r = fnmatch.fnmatch(p.name, self.pattern)
-        return FilterResult(r)
+        return fnmatch.fnmatch(p.name, self.pattern)
 
     def __str__(self) -> str:
         return f"is named {self.pattern!r}"
@@ -92,13 +97,12 @@ class FilterIsIn(Filter):
     #   TODO: regex
     pattern: str
 
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         # TODO: messy
         # TODO: shouldn't include the directory itself
-        r = (p.is_dir() and fnmatch.fnmatch(p.name, self.pattern)) or any(
+        return (p.is_dir() and fnmatch.fnmatch(p.name, self.pattern)) or any(
             fnmatch.fnmatch(s, self.pattern) for s in p.parts[:-1]
         )
-        return FilterResult(r)
 
     def negate(self) -> Filter:
         return FilterIsNotIn(self.pattern)
@@ -111,13 +115,13 @@ class FilterIsIn(Filter):
 class FilterIsNotIn(Filter):
     pattern: str
 
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         if p.is_dir() and fnmatch.fnmatch(p.name, self.pattern):
-            return FilterResult(False, should_recurse=False)
+            return (True, False)
         else:
             # assumption: if a parent directory was excluded we never got here in the first place
-            # b/c we passed should_recurse=False above
-            return FilterResult(True)
+            # b/c we passed include_children=False above
+            return True
 
     def __str__(self) -> str:
         return f"is not in {self.pattern!r}"
@@ -125,11 +129,10 @@ class FilterIsNotIn(Filter):
 
 @dataclass
 class FilterIsHidden(Filter):
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         # TODO: cross-platform?
         # TODO: only consider parts from search root?
-        r = any(s.startswith(".") for s in p.parts)
-        return FilterResult(r)
+        return any(s.startswith(".") for s in p.parts)
 
     def negate(self) -> Filter:
         return FilterIsNotHidden()
@@ -140,12 +143,12 @@ class FilterIsHidden(Filter):
 
 @dataclass
 class FilterIsNotHidden(Filter):
-    def test(self, p: Path) -> FilterResult:
+    def test(self, p: Path) -> Result:
         # TODO: cross-platform?
         if p.name.startswith("."):
-            return FilterResult(False, should_recurse=False)
+            return (False, False)
         else:
-            return FilterResult(True)
+            return True
 
     def __str__(self) -> str:
         return "is not hidden"
@@ -156,9 +159,8 @@ class FilterSizeGreater(Filter):
     base: decimal.Decimal
     multiple: int
 
-    def test(self, p: Path) -> FilterResult:
-        r = p.stat().st_size > (self.base * self.multiple)
-        return FilterResult(r)
+    def test(self, p: Path) -> Result:
+        return p.stat().st_size > (self.base * self.multiple)
 
     def __str__(self) -> str:
         # TODO: human-readable units
@@ -170,9 +172,8 @@ class FilterSizeGreaterEqual(Filter):
     base: decimal.Decimal
     multiple: int
 
-    def test(self, p: Path) -> FilterResult:
-        r = p.stat().st_size >= (self.base * self.multiple)
-        return FilterResult(r)
+    def test(self, p: Path) -> Result:
+        return p.stat().st_size >= (self.base * self.multiple)
 
     def __str__(self) -> str:
         return f">= {self.base * self.multiple} bytes"
@@ -183,9 +184,8 @@ class FilterSizeLess(Filter):
     base: decimal.Decimal
     multiple: int
 
-    def test(self, p: Path) -> FilterResult:
-        r = p.stat().st_size < (self.base * self.multiple)
-        return FilterResult(r)
+    def test(self, p: Path) -> Result:
+        return p.stat().st_size < (self.base * self.multiple)
 
     def __str__(self) -> str:
         return f"< {self.base * self.multiple} bytes"
@@ -196,9 +196,8 @@ class FilterSizeLessEqual(Filter):
     base: decimal.Decimal
     multiple: int
 
-    def test(self, p: Path) -> FilterResult:
-        r = p.stat().st_size <= (self.base * self.multiple)
-        return FilterResult(r)
+    def test(self, p: Path) -> Result:
+        return p.stat().st_size <= (self.base * self.multiple)
 
     def __str__(self) -> str:
         return f"<= {self.base * self.multiple} bytes"
@@ -214,9 +213,8 @@ class FilterHasExtension(Filter):
         else:
             self.ext = "." + ext
 
-    def test(self, p: Path) -> FilterResult:
-        r = p.suffix == self.ext
-        return FilterResult(r)
+    def test(self, p: Path) -> Result:
+        return p.suffix == self.ext
 
     def __str__(self) -> str:
         return f"has extension {self.ext!r}"
