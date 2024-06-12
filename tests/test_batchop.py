@@ -1,8 +1,13 @@
 import decimal
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Any, List, Optional
 
 from batchop import patterns
+from batchop.batchop import BatchOp
+from batchop.fileset import FileSet
 from batchop.filters import FilterIsFile, FilterIsFolder
 from batchop.parsing import PhraseMatch, parse_command, tokenize, try_phrase_match
 
@@ -101,3 +106,41 @@ class TestTokenize(unittest.TestCase):
 
     def test_weird_whitespace(self):
         self.assertEqual(tokenize("    a  b\tc   "), ["a", "b", "c"])
+
+
+class TestListCommand(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        create_file_tree(self.tmpdir.name)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_list_all(self):
+        bop = BatchOp(self.tmpdir.name)
+        fs = FileSet()
+        self.assert_paths_equal(bop.list(fs), ["empty"])
+
+    def assert_paths_equal(self, actual, expected):
+        expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]
+        self.assertEqual(list(sorted(actual)), list(sorted(expected)))
+
+
+def create_file_tree(root):
+    create_file_tree_from_template(root, FILE_TREE)
+
+
+def create_file_tree_from_template(root, t):
+    for name, contents in t.items():
+        path = os.path.join(root, name)
+        if isinstance(contents, str):
+            with open(path, "w") as f:
+                f.write(contents)
+        else:
+            os.mkdir(path)
+            create_file_tree_from_template(path, contents)
+
+
+FILE_TREE = {
+    "empty": {},
+}

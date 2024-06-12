@@ -24,7 +24,7 @@ class FileSet:
 
     def resolve(self, root: Path) -> Generator[Path, None, None]:
         # TODO: does this give a reasonable iteration order?
-        stack = [root]
+        stack = list(root.iterdir())
         while stack:
             item = stack.pop()
             # TODO: terminate filter application early if possible
