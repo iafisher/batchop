@@ -28,25 +28,6 @@ Interactive interface:
     534 files
     > move to markdown-files
 
-TODO: `--make-sandbox`
-TODO: `rename` command (needs design)
-TODO: gitignore support
-  (if current directory has .git, apply .gitignore)
-  probably also ignore hidden files by default
-  tricky when you have multiple gitignores in the same repository
-TODO: `move` command
-TODO: `replace` command
-TODO: `run` command
-TODO: `trash` command
-TODO: `countlines` command
-TODO: profiling + optimization
-  idea: walk the tree, filter functions can prevent sub-traversal as well as
-        excluding individual paths
-TODO: adjectives
-TODO: 'is not in __pycache__' gives different results before and after optimization
-TODO: support absolute/relative paths for patterns
-TODO: symlinks seem not to be handled correctly
-
 """
 
 import argparse

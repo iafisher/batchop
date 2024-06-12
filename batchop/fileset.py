@@ -125,8 +125,6 @@ class FileSet:
     def size_le(self, n: NumberLike, unit: str) -> "FileSet":
         return self.copy_with(filters.FilterSizeLessEqual(_n_times_unit(n, unit)))
 
-    # TODO: is_git_ignored() -- https://github.com/mherrmann/gitignore_parser
-
     def _normalize_path(self, path_like: PathLike) -> Path:
         path = Path(path_like)
         if path.is_absolute():
