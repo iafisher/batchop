@@ -1,9 +1,11 @@
 import abc
 import decimal
+import re
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from . import filters
+from .common import unit_to_multiple
 
 
 @dataclass
@@ -114,21 +116,27 @@ class String(BasePattern):
             return None
 
 
+_size_unit_pattern = re.compile(
+    r"^([0-9]+(?:\.[0-9]+)?)(b|byte|bytes|kb|kilobyte|kilobytes|mb|megabyte|megabytes|gb|gigabyte|gigabytes)$"
+)
+
+
 @dataclass
 class SizeUnit(BasePattern):
     def test(self, token: str) -> Optional[WordMatch]:
+        # TODO: allow space in between size and unit
         token_lower = token.lower()
-        if token_lower in ("b", "byte", "bytes"):
-            captured = 1
-        elif token_lower in ("kb", "kilobyte", "kilobytes"):
-            captured = 1_000
-        elif token_lower in ("mb", "megabyte", "megabytes"):
-            captured = 1_000_000
-        elif token_lower in ("gb", "gigabyte", "gigabytes"):
-            captured = 1_000_000_000
-        else:
+        m = _size_unit_pattern.match(token)
+        if m is None:
             return None
 
+        n = m.group(1)
+        unit = m.group(2)
+        multiple = unit_to_multiple(unit)
+        if multiple is None:
+            return None
+
+        captured = int(decimal.Decimal(n) * multiple)
         return WordMatch(captured=captured)
 
 
@@ -166,17 +174,17 @@ PATTERNS = [
         filters.FilterIsEmpty,
     ),
     # '> X bytes'
-    ([AnyLit([">", "gt"]), Decimal(), SizeUnit()], filters.FilterSizeGreater),
+    ([AnyLit([">", "gt"]), SizeUnit()], filters.FilterSizeGreater),
     # '>= X bytes'
     (
-        [AnyLit([">=", "gte", "ge"]), Decimal(), SizeUnit()],
+        [AnyLit([">=", "gte", "ge"]), SizeUnit()],
         filters.FilterSizeGreaterEqual,
     ),
     # '< X bytes'
-    ([AnyLit(["<", "lt"]), Decimal(), SizeUnit()], filters.FilterSizeLess),
+    ([AnyLit(["<", "lt"]), SizeUnit()], filters.FilterSizeLess),
     # '<= X bytes'
     (
-        [AnyLit(["<=", "lte", "le"]), Decimal(), SizeUnit()],
+        [AnyLit(["<=", "lte", "le"]), SizeUnit()],
         filters.FilterSizeLessEqual,
     ),
     # 'that is in X'

@@ -151,51 +151,47 @@ class FilterIsNotHidden(Filter):
 
 @dataclass
 class FilterSizeGreater(Filter):
-    base: decimal.Decimal
-    multiple: int
+    byte_count: int
 
     def test(self, p: Path) -> Result:
-        return p.stat().st_size > (self.base * self.multiple)
+        return p.is_file() and p.stat().st_size > self.byte_count
 
     def __str__(self) -> str:
         # TODO: human-readable units
-        return f"> {self.base * self.multiple} bytes"
+        return f"> {self.byte_count:,} bytes"
 
 
 @dataclass
 class FilterSizeGreaterEqual(Filter):
-    base: decimal.Decimal
-    multiple: int
+    byte_count: int
 
     def test(self, p: Path) -> Result:
-        return p.stat().st_size >= (self.base * self.multiple)
+        return p.is_file() and p.stat().st_size >= self.byte_count
 
     def __str__(self) -> str:
-        return f">= {self.base * self.multiple} bytes"
+        return f">= {self.byte_count:,} bytes"
 
 
 @dataclass
 class FilterSizeLess(Filter):
-    base: decimal.Decimal
-    multiple: int
+    byte_count: int
 
     def test(self, p: Path) -> Result:
-        return p.stat().st_size < (self.base * self.multiple)
+        return p.is_file() and p.stat().st_size < self.byte_count
 
     def __str__(self) -> str:
-        return f"< {self.base * self.multiple} bytes"
+        return f"< {self.byte_count:,} bytes"
 
 
 @dataclass
 class FilterSizeLessEqual(Filter):
-    base: decimal.Decimal
-    multiple: int
+    byte_count: int
 
     def test(self, p: Path) -> Result:
-        return p.stat().st_size <= (self.base * self.multiple)
+        return p.is_file() and p.stat().st_size <= self.byte_count
 
     def __str__(self) -> str:
-        return f"<= {self.base * self.multiple} bytes"
+        return f"<= {self.byte_count:,} bytes"
 
 
 @dataclass

@@ -1,10 +1,11 @@
 import dataclasses
+import decimal
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List
 
 from . import filters
-from .common import BatchOpError, PathLike
+from .common import BatchOpError, NumberLike, PathLike, unit_to_multiple
 from .filters import Filter
 
 
@@ -112,6 +113,18 @@ class FileSet:
     def is_not_hidden(self) -> "FileSet":
         return self.copy_with(filters.FilterIsNotHidden())
 
+    def size_gt(self, n: NumberLike, unit: str) -> "FileSet":
+        return self.copy_with(filters.FilterSizeGreater(_n_times_unit(n, unit)))
+
+    def size_ge(self, n: NumberLike, unit: str) -> "FileSet":
+        return self.copy_with(filters.FilterSizeGreaterEqual(_n_times_unit(n, unit)))
+
+    def size_lt(self, n: NumberLike, unit: str) -> "FileSet":
+        return self.copy_with(filters.FilterSizeLess(_n_times_unit(n, unit)))
+
+    def size_le(self, n: NumberLike, unit: str) -> "FileSet":
+        return self.copy_with(filters.FilterSizeLessEqual(_n_times_unit(n, unit)))
+
     # TODO: is_git_ignored() -- https://github.com/mherrmann/gitignore_parser
 
     def _normalize_path(self, path_like: PathLike) -> Path:
@@ -125,3 +138,14 @@ class FileSet:
             path = self.root / path
 
         return path
+
+
+def _n_times_unit(n: NumberLike, unit: str) -> int:
+    multiple = unit_to_multiple(unit)
+    if multiple is None:
+        raise BatchOpError(f"{unit!r} is not a recognized unit")
+
+    if isinstance(n, str):
+        n = decimal.Decimal(n)
+
+    return int(n * multiple)

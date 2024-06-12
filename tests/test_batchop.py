@@ -70,20 +70,19 @@ class TestPatternMatching(unittest.TestCase):
         pattern = [
             patterns.Opt(patterns.Lit("is")),
             patterns.Not(),
-            patterns.Decimal(),
             patterns.SizeUnit(),
         ]
-        m = try_phrase_match(pattern, ["is", "10.7", "gigabytes"])
-        self.assert_match(m, [decimal.Decimal("10.7"), 1_000_000_000])
+        m = try_phrase_match(pattern, ["is", "10.7gb"])
+        self.assert_match(m, [10_700_000_000])
 
-        m = try_phrase_match(pattern, ["10.7", "gigabytes"])
-        self.assert_match(m, [decimal.Decimal("10.7"), 1_000_000_000])
+        # m = try_phrase_match(pattern, ["10.7", "gigabytes"])
+        # self.assert_match(m, [10_700_000_000])
 
-        m = try_phrase_match(pattern, ["is", "not", "2.1", "mb"])
-        self.assert_match(m, [decimal.Decimal("2.1"), 1_000_000], negated=True)
+        m = try_phrase_match(pattern, ["is", "not", "2.1mb"])
+        self.assert_match(m, [2_100_000], negated=True)
 
-        m = try_phrase_match(pattern, ["not", "2.1", "mb"])
-        self.assert_match(m, [decimal.Decimal("2.1"), 1_000_000], negated=True)
+        m = try_phrase_match(pattern, ["not", "2.1mb"])
+        self.assert_match(m, [2_100_000], negated=True)
 
     def assert_match(
         self, m: PhraseMatch, captures: List[Any] = [], negated: bool = False
@@ -106,6 +105,9 @@ class TestTokenize(unittest.TestCase):
 
     def test_weird_whitespace(self):
         self.assertEqual(tokenize("    a  b\tc   "), ["a", "b", "c"])
+
+    def test_size_and_unit(self):
+        self.assertEqual(tokenize("10kb"), ["10kb"])
 
 
 class TestListCommand(unittest.TestCase):
@@ -170,6 +172,13 @@ class TestListCommand(unittest.TestCase):
                 "pride-and-prejudice/pride-and-prejudice-ch2.txt",
             ],
         )
+
+    def test_list_by_size(self):
+        fs = self.fs.size_gt(20, "kb")
+        self.assert_paths_equal(self.bop.list(fs), ["constitution.txt"])
+
+        fs = self.fs.size_lt(1, "kb")
+        self.assert_paths_equal(self.bop.list(fs), ["empty_file.txt"])
 
     def assert_paths_equal(self, actual, expected):
         expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]

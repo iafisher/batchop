@@ -174,6 +174,7 @@ class BatchOp:
         # TODO: don't print counts if 0
         # TODO: human-readable size units
         # TODO: option to list files
+        # TODO: use `du` command if available
         prompt = (
             f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'folder')} "
             + f"totaling {plural(nbytes, 'byte')}? "
