@@ -112,14 +112,44 @@ class TestListCommand(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         create_file_tree(self.tmpdir.name)
+        self.bop = BatchOp(self.tmpdir.name)
 
     def tearDown(self):
         self.tmpdir.cleanup()
 
     def test_list_all(self):
-        bop = BatchOp(self.tmpdir.name)
         fs = FileSet()
-        self.assert_paths_equal(bop.list(fs), ["empty"])
+        self.assert_paths_equal(
+            self.bop.list(fs),
+            [
+                "constitution.txt",
+                "empty_dir",
+                "empty_file.txt",
+                "pride-and-prejudice",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
+    def test_list_files(self):
+        fs = FileSet().is_file()
+        self.assert_paths_equal(
+            self.bop.list(fs),
+            [
+                "constitution.txt",
+                "empty_file.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
+    def test_list_folders(self):
+        fs = FileSet().is_folder()
+        self.assert_paths_equal(self.bop.list(fs), ["empty_dir", "pride-and-prejudice"])
+
+    def test_list_non_empty_folders(self):
+        fs = FileSet().is_folder().is_not_empty()
+        self.assert_paths_equal(self.bop.list(fs), ["pride-and-prejudice"])
 
     def assert_paths_equal(self, actual, expected):
         expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]
@@ -131,16 +161,24 @@ def create_file_tree(root):
 
 
 def create_file_tree_from_template(root, t):
-    for name, contents in t.items():
+    for name, subtree_maybe in t.items():
         path = os.path.join(root, name)
-        if isinstance(contents, str):
+        if subtree_maybe is not None:
+            os.mkdir(path)
+            create_file_tree_from_template(path, subtree_maybe)
+        else:
+            contents = (RESOURCES / name).read_text()
             with open(path, "w") as f:
                 f.write(contents)
-        else:
-            os.mkdir(path)
-            create_file_tree_from_template(path, contents)
 
 
+RESOURCES = Path(__file__).absolute().parent / "resources"
 FILE_TREE = {
-    "empty": {},
+    "constitution.txt": None,
+    "empty_dir": {},
+    "empty_file.txt": None,
+    "pride-and-prejudice": {
+        "pride-and-prejudice-ch1.txt": None,
+        "pride-and-prejudice-ch2.txt": None,
+    },
 }

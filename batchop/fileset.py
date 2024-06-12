@@ -72,6 +72,10 @@ class FileSet:
         self.filters.append(filters.FilterIsEmpty())
         return self
 
+    def is_not_empty(self) -> "FileSet":
+        self.filters.append(filters.FilterNegated(filters.FilterIsEmpty()))
+        return self
+
     def is_named(self, pattern: str) -> "FileSet":
         self.filters.append(filters.FilterIsNamed(pattern))
         return self

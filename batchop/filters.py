@@ -34,6 +34,7 @@ class FilterNegated(Filter):
 
     def test(self, p: Path) -> Result:
         r = self.inner.test(p)
+        print("FilterNegated", self.inner, p, r)
         if isinstance(r, tuple):
             # TODO: is it always right to pass include_children through unchanged?
             include_self, include_children = r
@@ -67,7 +68,7 @@ class FilterIsFile(Filter):
 class FilterIsEmpty(Filter):
     def test(self, p: Path) -> Result:
         if p.is_dir():
-            return any(p.iterdir())
+            return not any(p.iterdir())
         else:
             return p.stat().st_size == 0
 
