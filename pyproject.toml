@@ -15,6 +15,7 @@ batchop = "batchop.batchop:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
+mypy = "^1.10.0"
 
 [build-system]
 requires = ["poetry-core"]

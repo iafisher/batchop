@@ -188,7 +188,8 @@ PATTERNS = [
             Lit("in"),
             String(),
         ],
-        filters.FilterIsIn,
+        # TODO: support glob and regex
+        filters.FilterIsInPath,
     ),
     # 'that is hidden'
     (

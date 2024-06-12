@@ -56,12 +56,9 @@ from pathlib import Path
 from typing import Generator, List, Optional, Union
 
 from . import filters, parsing
-from .exceptions import BatchOpSyntaxError
+from .common import BatchOpSyntaxError, PathLike
 from .fileset import FileSet
 from .filters import Filter
-
-
-PathLike = Union[str, Path]
 
 
 def main() -> None:
@@ -80,8 +77,8 @@ def main() -> None:
 def main_execute(cmdstr: str, *, directory: Optional[str]) -> None:
     parsed_cmd = parsing.parse_command(cmdstr)
 
-    bop = BatchOp(root=directory)
-    fileset = FileSet(parsed_cmd.filters)
+    bop = BatchOp()
+    fileset = FileSet(path_or_default(directory), parsed_cmd.filters)
     if parsed_cmd.command == "delete":
         bop.delete(fileset)
     elif parsed_cmd.command == "list":
@@ -98,8 +95,7 @@ def main_interactive(d: Optional[str]) -> None:
     import readline
 
     root = path_or_default(d)
-
-    fs = FileSet.with_default_filters()
+    fs = FileSet.with_default_filters(root)
     if len(fs.filters) > 0:
         print("Filters applied by default: ")
         for f in fs.filters:
@@ -113,7 +109,7 @@ def main_interactive(d: Optional[str]) -> None:
         # TODO: separate counts for files and directories
         # TODO: default to ignoring .git + .gitignore?
         if recalculate:
-            current_files = list(fs.resolve(root))
+            current_files = list(fs.resolve())
             print(f"{plural(len(current_files), 'file')}")
 
         recalculate = False
@@ -163,18 +159,15 @@ def main_interactive(d: Optional[str]) -> None:
 
 
 class BatchOp:
-    def __init__(self, root: Optional[PathLike]) -> None:
-        self.root = path_or_default(root)
-
     def list(self, fileset: FileSet) -> Generator[Path, None, None]:
-        yield from list(fileset.resolve(self.root))
+        yield from list(fileset.resolve())
 
     def count(self, fileset: FileSet) -> int:
-        return sum(1 for _ in fileset.resolve(self.root))
+        return sum(1 for _ in fileset.resolve())
 
     def delete(self, fileset: FileSet) -> None:
         # TODO: avoid computing entire file-set twice?
-        size = fileset.calculate_size(self.root)
+        size = fileset.calculate_size()
         nfiles = size.file_count
         ndirs = size.directory_count
         nbytes = size.size_in_bytes
@@ -192,7 +185,7 @@ class BatchOp:
         # TODO: don't remove files that are in a directory that will be removed
         # TODO: don't use -rf except for directories
         # TODO: pass paths to `rm` in batches
-        for p in fileset.resolve(self.root):
+        for p in fileset.resolve():
             # TODO: enable rm
             sh(["echo", "rm", "-rf", str(p)])
 

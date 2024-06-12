@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, List, NoReturn, Optional, Tuple
 
 from . import filters
-from .exceptions import BatchOpImpossibleError, BatchOpSyntaxError
+from .common import BatchOpImpossibleError, BatchOpSyntaxError
 from .filters import Filter
 from .patterns import PATTERNS, BasePattern
 

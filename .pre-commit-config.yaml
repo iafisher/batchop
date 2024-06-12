@@ -34,10 +34,10 @@ repos:
     -   id: mypy
         name: mypy
         description: 'Run mypy on the package'
-        entry: mypy
+        entry: poetry
         language: system
         pass_filenames: false
-        args: [batchop]
+        args: [run, mypy, batchop]
     -   id: unittests
         name: unittests
         description: 'Run unit tests'

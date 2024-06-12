@@ -89,35 +89,25 @@ class FilterIsNamed(Filter):
 
 
 @dataclass
-class FilterIsIn(Filter):
-    # pattern can be:
-    #   fixed string (matches name exactly)
-    #   glob pattern
-    #   TODO: absolute/relative file path (e.g., includes slash)
-    #     tricky to handle relative file paths because we need to know root directory
-    #   TODO: regex
-    pattern: str
+class FilterIsInPath(Filter):
+    path: Path
 
     def test(self, p: Path) -> Result:
-        # TODO: messy
-        # TODO: shouldn't include the directory itself
-        return (p.is_dir() and fnmatch.fnmatch(p.name, self.pattern)) or any(
-            fnmatch.fnmatch(s, self.pattern) for s in p.parts[:-1]
-        )
+        return test_is_in_exact(self.path, p)
 
     def negate(self) -> Filter:
-        return FilterIsNotIn(self.pattern)
+        return FilterIsNotInPath(self.path)
 
     def __str__(self) -> str:
-        return f"is in {self.pattern!r}"
+        return f"is in {self.path!r}"
 
 
 @dataclass
-class FilterIsNotIn(Filter):
-    pattern: str
+class FilterIsNotInPath(Filter):
+    path: Path
 
     def test(self, p: Path) -> Result:
-        if p.is_dir() and fnmatch.fnmatch(p.name, self.pattern):
+        if test_is_in_exact(self.path, p):
             return (True, False)
         else:
             # assumption: if a parent directory was excluded we never got here in the first place
@@ -125,7 +115,11 @@ class FilterIsNotIn(Filter):
             return True
 
     def __str__(self) -> str:
-        return f"is not in {self.pattern!r}"
+        return f"is not in {self.path!r}"
+
+
+def test_is_in_exact(to_include, to_test):
+    return to_test.is_relative_to(to_include) and to_test != to_include
 
 
 @dataclass
