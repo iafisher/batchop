@@ -111,7 +111,7 @@ class FilterIsLike(Filter):
 
     def test(self, p: Path) -> Result:
         # TODO: case-insensitive file systems?
-        return fnmatch.fnmatch(p.name, self.pattern)
+        return fnmatch.fnmatch(p, self.pattern)  # type: ignore
 
     def __str__(self) -> str:
         return f"is like {self.pattern!r}"
