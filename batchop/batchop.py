@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Generator, List, Optional, Union
 
 from . import filters, globreplace, parsing
-from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike
+from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike, plural
 from .fileset import FileSet
 from .filters import Filter
 
@@ -119,13 +119,15 @@ def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
 
     # whether to re-calculate the file set on next iteration of loop
     recalculate = True
-    current_files = []
     while True:
-        # TODO: separate counts for files and directories
         # TODO: default to ignoring .git + .gitignore?
         if recalculate:
-            current_files = list(fs.resolve())
-            print(f"{plural(len(current_files), 'file')}")
+            size = fs.calculate_size()
+            print(f"{plural(size.file_count, 'file')}", end="")
+            if size.directory_count > 0:
+                print(f", {plural(size.directory_count, 'directory', 'directories')}")
+            else:
+                print()
 
         recalculate = False
         try:
@@ -141,7 +143,7 @@ def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
             continue
 
         if s.lower() == "list":
-            for p in current_files:
+            for p in fs.resolve():
                 print(p)
             continue
         elif s[0] == "!":
@@ -191,7 +193,7 @@ class BatchOp:
         # TODO: option to list files
         # TODO: use `du` command if available
         prompt = (
-            f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'folder')} "
+            f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'directory', 'directories')} "
             + f"totaling {plural(nbytes, 'byte')}? "
         )
         if require_confirm and not confirm(prompt):
@@ -203,6 +205,7 @@ class BatchOp:
         # TODO: pass paths to `rm` in batches
         for p in fileset.resolve():
             # TODO: enable rm
+            # TODO: cross-platform
             sh(["echo", "rm", "-rf", p])
 
     def rename(
@@ -226,6 +229,7 @@ class BatchOp:
             if new_name == p.name:
                 continue
 
+            # TODO: cross-platform
             sh(["mv", "-n", p, p.parent / new_name])
 
 
@@ -253,7 +257,3 @@ def path_or_default(p: Optional[PathLike]) -> Path:
         r = Path(p)
 
     return r
-
-
-def plural(n: int, s: str) -> str:
-    return f"{n} {s}" if n == 1 else f"{n} {s}s"

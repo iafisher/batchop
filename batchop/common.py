@@ -35,3 +35,10 @@ def unit_to_multiple(unit: str) -> Optional[int]:
         return 1_000_000_000_000
     else:
         return None
+
+
+def plural(n: int, s: str, ss: str = "") -> str:
+    if not ss:
+        ss = s + "s"
+
+    return f"1 {s}" if n == 1 else f"{n:,} {ss}"

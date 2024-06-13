@@ -78,8 +78,8 @@ class FileSet:
     def copy_with(self, f: Filter) -> "FileSet":
         return FileSet(self.root, self.filters + [f])
 
-    def is_folder(self) -> "FileSet":
-        return self.copy_with(filters.FilterIsFolder())
+    def is_dir(self) -> "FileSet":
+        return self.copy_with(filters.FilterIsDirectory())
 
     def is_file(self) -> "FileSet":
         return self.copy_with(filters.FilterIsFile())

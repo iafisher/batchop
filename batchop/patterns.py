@@ -159,9 +159,9 @@ PATTERNS = [
             AnyLit(["is", "are"]),
             Not(),
             Opt(Lit("a")),
-            Lit("folder"),
+            AnyLit(["folder", "directory", "dir"]),
         ],
-        filters.FilterIsFolder,
+        filters.FilterIsDirectory,
     ),
     # 'that is like X'
     (

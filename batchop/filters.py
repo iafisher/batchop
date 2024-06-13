@@ -47,12 +47,12 @@ class FilterNegated(Filter):
 
 
 @dataclass
-class FilterIsFolder(Filter):
+class FilterIsDirectory(Filter):
     def test(self, p: Path) -> Result:
         return p.is_dir()
 
     def __str__(self) -> str:
-        return "is folder"
+        return "is directory"
 
 
 @dataclass

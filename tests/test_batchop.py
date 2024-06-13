@@ -9,7 +9,7 @@ from typing import Any, List, Optional
 from batchop import globreplace, patterns
 from batchop.batchop import BatchOp, main_execute
 from batchop.fileset import FileSet
-from batchop.filters import FilterIsFile, FilterIsFolder
+from batchop.filters import FilterIsFile, FilterIsDirectory
 from batchop.parsing import (
     PhraseMatch,
     RenameCommand,
@@ -31,7 +31,7 @@ class TestCommandParsing(unittest.TestCase):
 
         cmd = parse_command("delete folders")
         self.assertEqual(cmd.command, "delete")
-        self.assertEqual(cmd.filters, [FilterIsFolder()])
+        self.assertEqual(cmd.filters, [FilterIsDirectory()])
 
     def test_rename_command(self):
         cmd = parse_command("rename '*.md' to '#1.md'")
@@ -182,15 +182,15 @@ class TestListCommand(BaseTmpDir):
             ],
         )
 
-    def test_list_folders(self):
-        fs = self.fs.is_folder()
+    def test_list_directories(self):
+        fs = self.fs.is_dir()
         self.assert_paths_equal(self.bop.list(fs), ["empty_dir", "pride-and-prejudice"])
 
-    def test_list_non_empty_folders(self):
-        fs = self.fs.is_folder().is_not_empty()
+    def test_list_non_empty_directories(self):
+        fs = self.fs.is_dir().is_not_empty()
         self.assert_paths_equal(self.bop.list(fs), ["pride-and-prejudice"])
 
-    def test_list_in_folder(self):
+    def test_list_in_directory(self):
         fs = self.fs.is_in("pride-and-prejudice")
         self.assert_paths_equal(
             self.bop.list(fs),

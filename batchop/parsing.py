@@ -93,8 +93,8 @@ def parse_np(tokens: List[str]) -> List[Filter]:
         return []
     elif tkn == "files":
         return [filters.FilterIsFile()]
-    elif tkn == "folders":
-        return [filters.FilterIsFolder()]
+    elif tkn == "folders" or tkn == "directories":
+        return [filters.FilterIsDirectory()]
     else:
         tokens.insert(0, tkn)
         return []
