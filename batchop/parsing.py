@@ -22,8 +22,12 @@ class RenameCommand:
 ParsedCommand = Union[UnaryCommand, RenameCommand]
 
 
-def parse_command(cmdstr: str) -> ParsedCommand:
-    tokens = tokenize(cmdstr)
+def parse_command(words: Union[str, List[str]]) -> ParsedCommand:
+    if isinstance(words, str):
+        tokens = tokenize(words)
+    else:
+        tokens = words
+
     if len(tokens) == 0:
         err_empty_input()
 

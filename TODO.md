@@ -1,4 +1,4 @@
-- `rename` command (needs design)
+- ~~`rename` command (needs design)~~
 - `trash` command
 - `undo` command
 - `move` command
@@ -20,7 +20,7 @@
 - support regex patterns for `is in` filter
 - do symlinks work?
 - how to handle special files?
-- shell quoting doesn't work, e.g. `rename '* *.md'` is passed as `['rename', '* *.md']` which becomes `'rename * *.md'` which can no longer be tokenized properly
+- ~~shell quoting doesn't work, e.g. `rename '* *.md'` is passed as `['rename', '* *.md']` which becomes `'rename * *.md'` which can no longer be tokenized properly~~
     - if one command-line arg, tokenize it
     - if more than one, treat it as already tokenized?
         - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"

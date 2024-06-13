@@ -52,19 +52,19 @@ def main() -> None:
     args = parser.parse_args()
 
     if len(args.words) > 0:
-        cmdstr = " ".join(args.words)
+        words = args.words[0] if len(args.words) == 1 else args.words
         main_execute(
-            cmdstr, directory=args.directory, require_confirm=not args.no_confirm
+            words, directory=args.directory, require_confirm=not args.no_confirm
         )
     else:
         main_interactive(args.directory)
 
 
 def main_execute(
-    cmdstr: str, *, directory: Optional[str], require_confirm: bool
+    words: Union[str, List[str]], *, directory: Optional[str], require_confirm: bool
 ) -> None:
     try:
-        parsed_cmd = parsing.parse_command(cmdstr)
+        parsed_cmd = parsing.parse_command(words)
     except BatchOpSyntaxError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
