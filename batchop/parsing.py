@@ -34,8 +34,11 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
 
     command = tokens.pop(0).lower()
 
-    if command in ("count", "delete", "list"):
-        filters = parse_np_and_preds(tokens, cwd=cwd)
+    if command in ("count", "list"):
+        filters = parse_np_and_preds(tokens, cwd=cwd, empty_ok=True)
+        return UnaryCommand(command=command, filters=filters)
+    elif command == "delete":
+        filters = parse_np_and_preds(tokens, cwd=cwd, empty_ok=False)
         return UnaryCommand(command=command, filters=filters)
     elif command == "undo":
         # TODO: handle trailing input
@@ -55,7 +58,12 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
     return RenameCommand(tokens[0], tokens[2])
 
 
-def parse_np_and_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
+def parse_np_and_preds(
+    tokens: List[str], *, cwd: Path, empty_ok: bool = False
+) -> List[Filter]:
+    if empty_ok and not tokens:
+        return []
+
     filters = parse_np(tokens, cwd=cwd)
     filters.extend(parse_preds(tokens, cwd=cwd))
     return filters

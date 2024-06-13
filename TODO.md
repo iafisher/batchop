@@ -1,5 +1,6 @@
 ## Bugs
 - ~~preview file/directory count for e.g. `delete .venv` doesn't work~~
+- don't exit interactive mode on parse error
 
 ## Features
 - ~~`rename` command (needs design)~~
@@ -44,6 +45,9 @@
 - filter on owner: `is owned by X`
 - filter on time modified (needs design)
 - filter on permissions: `is executable`
+
+## Cleanup
+- just chdir to handle `-d` flag?
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?
