@@ -95,6 +95,17 @@ class FilterIsEmpty(Filter):
 
 
 @dataclass
+class FilterIs(Filter):
+    path: Path
+
+    def test(self, p: Path) -> Result:
+        return self.path == p
+
+    def __str__(self) -> str:
+        return f"is {self.path}"
+
+
+@dataclass
 class FilterIsLike(Filter):
     pattern: str
 
@@ -238,3 +249,15 @@ class FilterHasExtension(Filter):
 
     def __str__(self) -> str:
         return f"has extension {self.ext!r}"
+
+
+def pattern_to_filter(s: str) -> Filter:
+    # delete '*.md'        -- glob pattern
+    # delete /.*\\.md/     -- regex
+    # delete __pycache__   -- path
+    if s.startswith("/") and s.endswith("/"):
+        return FilterMatches(re.compile(s[1:-1]))
+    elif "*" in s or "?" in s or "[" in s:
+        return FilterIsLike(s)
+    else:
+        return FilterIs(Path(s))

@@ -269,6 +269,18 @@ class TestDeleteCommand(BaseTmpDir):
         self.assert_file_exists("empty_dir")
         self.assert_file_exists("constitution.txt")
 
+    def test_delete_glob_pattern(self):
+        main_execute(
+            "delete '*.txt'", directory=self.tmpdir.name, require_confirm=False
+        )
+
+        self.assert_file_not_exists("constitution.txt")
+        self.assert_file_not_exists("empty_file.txt")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+        self.assert_file_exists("empty_dir")
+        self.assert_file_exists("pride-and-prejudice")
+
 
 RESOURCES = Path(__file__).absolute().parent / "resources"
 FILE_TREE = {

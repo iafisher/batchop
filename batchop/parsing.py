@@ -108,8 +108,8 @@ def parse_np(tokens: List[str]) -> List[Filter]:
     elif tkn in ("folders", "directories", "dirs"):
         r.append(filters.FilterIsDirectory())
     else:
-        # failed to parse
-        return []
+        # TODO: should probably check this token isn't some special word
+        r.append(filters.pattern_to_filter(tkn))
 
     # remove the tokens we consumed
     i += 1

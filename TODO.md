@@ -1,3 +1,7 @@
+## Bugs
+- preview file/directory count for e.g. `delete .venv` doesn't work
+
+## Features
 - ~~`rename` command (needs design)~~
 - `trash` command
 - `undo` command
@@ -15,7 +19,7 @@
     - tricky when you have multiple gitignores in the same repository
     - <https://github.com/mherrmann/gitignore_parser>
 - ~~adjectives (`list all hidden files`)~~
-- pattern as a noun (`delete '*.md'`)
+- ~~pattern as a noun (`delete '*.md'`)~~
 - ~~"directory" as synonym for "folder"~~
 - support glob patterns for `is in` filter
 - support regex patterns for `is in` filter
