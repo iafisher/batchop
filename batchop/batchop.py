@@ -334,6 +334,7 @@ class BatchOp:
 
     @classmethod
     def _choose_directory(cls) -> Path:
+        # TODO: check permissions
         env_batch_dir = os.environ.get("BATCHOP_DIR")
         if env_batch_dir is not None:
             return Path(env_batch_dir).absolute()

@@ -276,6 +276,17 @@ class TestDeleteCommand(BaseTmpDir):
         self.assert_file_exists("empty_dir")
         self.assert_file_exists("constitution.txt")
 
+    def test_delete_folder_by_name(self):
+        main_execute(
+            "delete pride-and-prejudice",
+            directory=self.tmpdir.name,
+            require_confirm=False,
+        )
+
+        self.assert_file_not_exists("pride-and-prejudice")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+
     def test_delete_glob_pattern_and_undo(self):
         context = uuid.uuid4().hex
 

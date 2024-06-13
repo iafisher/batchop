@@ -270,7 +270,7 @@ class FilterHasExtension(Filter):
         return f"has extension {self.ext!r}"
 
 
-def pattern_to_filter(s: str) -> Filter:
+def pattern_to_filter(s: str, *, cwd: Path) -> Filter:
     # delete '*.md'        -- glob pattern
     # delete /.*\\.md/     -- regex
     # delete __pycache__   -- path
@@ -279,4 +279,8 @@ def pattern_to_filter(s: str) -> Filter:
     elif "*" in s or "?" in s or "[" in s:
         return FilterIsLike(s)
     else:
-        return FilterIs(Path(s))
+        p = Path(s)
+        if not p.is_absolute():
+            p = cwd / p
+
+        return FilterIs(p)

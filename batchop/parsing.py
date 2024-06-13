@@ -56,7 +56,7 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
 
 
 def parse_np_and_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
-    filters = parse_np(tokens)
+    filters = parse_np(tokens, cwd=cwd)
     filters.extend(parse_preds(tokens, cwd=cwd))
     return filters
 
@@ -91,7 +91,7 @@ def parse_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
     return filters
 
 
-def parse_np(tokens: List[str]) -> List[Filter]:
+def parse_np(tokens: List[str], *, cwd: Path) -> List[Filter]:
     if len(tokens) == 0:
         err_empty_input()
 
@@ -118,7 +118,7 @@ def parse_np(tokens: List[str]) -> List[Filter]:
         r.append(filters.FilterIsDirectory())
     else:
         # TODO: should probably check this token isn't some special word
-        r.append(filters.pattern_to_filter(tkn))
+        r.append(filters.pattern_to_filter(tkn, cwd=cwd))
 
     # remove the tokens we consumed
     i += 1
