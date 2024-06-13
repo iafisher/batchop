@@ -47,6 +47,15 @@ class FilterNegated(Filter):
 
 
 @dataclass
+class FilterTrue(Filter):
+    def test(self, p: Path) -> Result:
+        return True
+
+    def __str__(self) -> str:
+        return "always true"
+
+
+@dataclass
 class FilterIsDirectory(Filter):
     def test(self, p: Path) -> Result:
         return p.is_dir()

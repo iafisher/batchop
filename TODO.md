@@ -14,9 +14,9 @@
     - probably also ignore hidden files by default
     - tricky when you have multiple gitignores in the same repository
     - <https://github.com/mherrmann/gitignore_parser>
-- adjectives (`list all hidden files`)
+- ~~adjectives (`list all hidden files`)~~
 - pattern as a noun (`delete '*.md'`)
-- "directory" as synonym for "folder"
+- ~~"directory" as synonym for "folder"~~
 - support glob patterns for `is in` filter
 - support regex patterns for `is in` filter
 - do symlinks work?
@@ -26,7 +26,13 @@
     - if more than one, treat it as already tokenized?
         - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"
 - `--verbose` flag
+- simple optimizer for filter order (drop `FilterTrue`, put most restrictive filters first, remove duplicates)
+
+## More filters
 - `X or Y` filter
+- filter on owner: `is owned by X`
+- filter on time modified (needs design)
+- filter on permissions: `is executable`
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?
@@ -40,3 +46,5 @@
     - For `__pycache__` the latter interpretation seems more intuitive, but if the directory is
       some specific name like `batchop`, then the former.
     - Idea: if contains a slash, always interpreted as a path; otherwise interpreted as a name
+- Should hidden files include `.a/b` or only `.b`?
+    - i.e., is a file hidden if in a hidden directory, or only if itself hidden?

@@ -86,18 +86,47 @@ def parse_np(tokens: List[str]) -> List[Filter]:
     if len(tokens) == 0:
         err_empty_input()
 
-    tkn = tokens.pop(0)
+    r = []
+    i = 0
+    while i < len(tokens):
+        tkn = tokens[i]
+        f = adj_to_filter(tkn)
+        if f is None:
+            break
+        r.append(f)
+        i += 1
 
-    # TODO: parse adjectival modifiers (e.g., 'non-empty')
+    if i == len(tokens):
+        # failed to parse
+        return []
+
+    tkn = tokens[i]
     if tkn == "anything" or tkn == "everything":
-        return []
+        pass
     elif tkn == "files":
-        return [filters.FilterIsFile()]
-    elif tkn == "folders" or tkn == "directories":
-        return [filters.FilterIsDirectory()]
+        r.append(filters.FilterIsFile())
+    elif tkn in ("folders", "directories", "dirs"):
+        r.append(filters.FilterIsDirectory())
     else:
-        tokens.insert(0, tkn)
+        # failed to parse
         return []
+
+    # remove the tokens we consumed
+    i += 1
+    del tokens[:i]
+
+    return r
+
+
+def adj_to_filter(token: str) -> Optional[Filter]:
+    if token == "all" or token == "any":
+        return filters.FilterTrue()
+    elif token == "empty":
+        return filters.FilterIsEmpty()
+    elif token == "hidden":
+        return filters.FilterIsHidden()
+    else:
+        return None
 
 
 @dataclass

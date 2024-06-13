@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 from typing import Any, List, Optional
 
-from batchop import globreplace, patterns
+from batchop import filters, globreplace, patterns
 from batchop.batchop import BatchOp, main_execute
 from batchop.fileset import FileSet
-from batchop.filters import FilterIsFile, FilterIsDirectory
 from batchop.parsing import (
     PhraseMatch,
     RenameCommand,
+    UnaryCommand,
     parse_command,
     tokenize,
     try_phrase_match,
@@ -22,16 +22,23 @@ from batchop.parsing import (
 class TestCommandParsing(unittest.TestCase):
     def test_delete_command(self):
         cmd = parse_command("delete everything")
-        self.assertEqual(cmd.command, "delete")
-        self.assertEqual(cmd.filters, [])
+        self.assertEqual(cmd, UnaryCommand("delete", []))
 
         cmd = parse_command("delete anything that is a file")
-        self.assertEqual(cmd.command, "delete")
-        self.assertEqual(cmd.filters, [FilterIsFile()])
+        self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsFile()]))
 
         cmd = parse_command("delete folders")
-        self.assertEqual(cmd.command, "delete")
-        self.assertEqual(cmd.filters, [FilterIsDirectory()])
+        self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsDirectory()]))
+
+    def test_list_command(self):
+        cmd = parse_command("list all empty files")
+        self.assertEqual(
+            cmd,
+            UnaryCommand(
+                "list",
+                [filters.FilterTrue(), filters.FilterIsEmpty(), filters.FilterIsFile()],
+            ),
+        )
 
     def test_rename_command(self):
         cmd = parse_command("rename '*.md' to '#1.md'")
@@ -252,7 +259,7 @@ class TestRenameCommand(BaseTmpDir):
 class TestDeleteCommand(BaseTmpDir):
     def test_delete_empty_files(self):
         main_execute(
-            "delete files that are empty",
+            "delete empty files",
             directory=self.tmpdir.name,
             require_confirm=False,
         )
