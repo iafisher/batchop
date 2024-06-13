@@ -35,7 +35,6 @@ class FilterNegated(Filter):
 
     def test(self, p: Path) -> Result:
         r = self.inner.test(p)
-        print("FilterNegated", self.inner, p, r)
         if isinstance(r, tuple):
             # TODO: is it always right to pass include_children through unchanged?
             include_self, include_children = r
@@ -63,6 +62,15 @@ class FilterIsFile(Filter):
 
     def __str__(self) -> str:
         return "is file"
+
+
+@dataclass
+class FilterIsSpecial(Filter):
+    def test(self, p: Path) -> Result:
+        return not p.is_file() and not p.is_dir()
+
+    def __str__(self) -> str:
+        return "is special file"
 
 
 @dataclass

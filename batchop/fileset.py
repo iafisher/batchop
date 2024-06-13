@@ -20,22 +20,27 @@ class FileSetSize:
 class FileSet:
     root: Path
     filters: List[Filter]
+    special_files: bool
 
-    def __init__(self, root: PathLike, filters: List[Filter] = []) -> None:
+    def __init__(
+        self, root: PathLike, filters: List[Filter] = [], *, special_files: bool = False
+    ) -> None:
         self.root = Path(root)
         self.filters = filters
-
-    @classmethod
-    def with_default_filters(cls, root: PathLike) -> "FileSet":
-        return FileSet(root).is_not_hidden()
+        self.special_files = special_files
 
     def resolve(self) -> Generator[Path, None, None]:
+        all_filters = []
+        if not self.special_files:
+            all_filters.append(filters.FilterIsSpecial().negate())
+        all_filters.extend(self.filters)
+
         # TODO: does this give a reasonable iteration order?
         stack = list(self.root.iterdir())
         while stack:
             item = stack.pop()
             # TODO: terminate filter application early if possible
-            results = [filters.expand_result(f.test(item)) for f in self.filters]
+            results = [filters.expand_result(f.test(item)) for f in all_filters]
             should_include = all(include_self for include_self, _ in results)
             should_recurse = all(include_children for _, include_children in results)
 
@@ -63,6 +68,9 @@ class FileSet:
 
     def push(self, f: Filter) -> None:
         self.filters.append(f)
+
+    def extend(self, fs: List[Filter]) -> None:
+        self.filters.extend(fs)
 
     def clear(self) -> None:
         self.filters.clear()

@@ -44,7 +44,6 @@ def parse_command(words: Union[str, List[str]]) -> ParsedCommand:
 
 def parse_rename_command(tokens: List[str]) -> RenameCommand:
     if len(tokens) != 3 and tokens[1].lower() != "to":
-        print(tokens)
         # TODO: more helpful error message
         raise BatchOpSyntaxError("could not parse `rename` command")
 

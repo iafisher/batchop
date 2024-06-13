@@ -48,20 +48,32 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
     parser.add_argument("--no-confirm", action="store_true")
+    parser.add_argument(
+        "--special-files",
+        action="store_true",
+        help="Include files that are neither regular files nor directories. This is rarely desirable.",
+    )
     parser.add_argument("words", nargs="*")
     args = parser.parse_args()
 
     if len(args.words) > 0:
         words = args.words[0] if len(args.words) == 1 else args.words
         main_execute(
-            words, directory=args.directory, require_confirm=not args.no_confirm
+            words,
+            directory=args.directory,
+            require_confirm=not args.no_confirm,
+            special_files=args.special_files,
         )
     else:
-        main_interactive(args.directory)
+        main_interactive(args.directory, special_files=args.special_files)
 
 
 def main_execute(
-    words: Union[str, List[str]], *, directory: Optional[str], require_confirm: bool
+    words: Union[str, List[str]],
+    *,
+    directory: Optional[str],
+    require_confirm: bool,
+    special_files: bool = False,
 ) -> None:
     try:
         parsed_cmd = parsing.parse_command(words)
@@ -71,7 +83,9 @@ def main_execute(
 
     bop = BatchOp()
     if isinstance(parsed_cmd, parsing.UnaryCommand):
-        fileset = FileSet(path_or_default(directory), parsed_cmd.filters)
+        fileset = FileSet(
+            path_or_default(directory), parsed_cmd.filters, special_files=special_files
+        )
         if parsed_cmd.command == "delete":
             bop.delete(fileset, require_confirm=require_confirm)
         elif parsed_cmd.command == "list":
@@ -83,7 +97,7 @@ def main_execute(
         else:
             parsing.err_unknown_command(parsed_cmd.command)
     elif isinstance(parsed_cmd, parsing.RenameCommand):
-        fileset = FileSet(path_or_default(directory))
+        fileset = FileSet(path_or_default(directory), special_files=special_files)
         bop.rename(
             fileset, parsed_cmd.old, parsed_cmd.new, require_confirm=require_confirm
         )
@@ -91,11 +105,12 @@ def main_execute(
         raise BatchOpImpossibleError
 
 
-def main_interactive(d: Optional[str]) -> None:
+def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
     import readline
 
     root = path_or_default(d)
-    fs = FileSet.with_default_filters(root)
+    fs = FileSet(root, special_files=special_files).is_not_hidden()
+
     if len(fs.filters) > 0:
         print("Filters applied by default: ")
         for f in fs.filters:

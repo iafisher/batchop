@@ -19,7 +19,7 @@
 - support glob patterns for `is in` filter
 - support regex patterns for `is in` filter
 - do symlinks work?
-- how to handle special files?
+- ~~how to handle special files?~~
 - ~~shell quoting doesn't work, e.g. `rename '* *.md'` is passed as `['rename', '* *.md']` which becomes `'rename * *.md'` which can no longer be tokenized properly~~
     - if one command-line arg, tokenize it
     - if more than one, treat it as already tokenized?
