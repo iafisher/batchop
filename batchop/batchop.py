@@ -241,15 +241,19 @@ class BatchOp:
 
         # TODO: pass paths to `rm` in batches
         for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
-            new_path = self.directory / self._BACKUP_DIR / f"{invocation_id}___{i:0>8}"
-            i += 1
-            self.db.create_invocation_op(invocation_id, OP_TYPE_DELETE, p, new_path)
-            # TODO: cross-platform
-            sh(["mv", p, new_path])
-            # if p.is_dir():
-            #     sh(["rm", "-rf", p], dry_run=dry_run)
-            # else:
-            #     sh(["rm", p], dry_run=dry_run)
+            if dry_run:
+                print("remove {p}")
+            else:
+                new_path = (
+                    self.directory / self._BACKUP_DIR / f"{invocation_id}___{i:0>8}"
+                )
+                i += 1
+                self.db.create_invocation_op(invocation_id, OP_TYPE_DELETE, p, new_path)
+                # TODO: cross-platform
+                sh(["mv", p, new_path])
+
+        if dry_run:
+            self._dry_run_notice()
 
     def undo(self, *, require_confirm: bool = True) -> None:
         # TODO: confirmation
@@ -324,7 +328,17 @@ class BatchOp:
                 continue
 
             # TODO: cross-platform
-            sh(["mv", "-n", p, p.parent / new_name], dry_run=dry_run)
+            if dry_run:
+                print(f"rename {p} to {new_name}")
+            else:
+                sh(["mv", "-n", p, p.parent / new_name])
+
+        if dry_run:
+            self._dry_run_notice()
+
+    def _dry_run_notice(self):
+        print()
+        print("Dry run: no files changed.")
 
     @classmethod
     def _ensure_directory(cls) -> Path:
@@ -351,12 +365,8 @@ class BatchOp:
         return Path.home() / ".batchop"
 
 
-def sh(args: Sequence[Union[str, Path]], *, dry_run: bool = False) -> None:
-    if dry_run:
-        args = ["echo"] + list(args)
-
-    # don't capture output when --dry-run so that `echo` prints to the terminal
-    subprocess.run(args, capture_output=not dry_run, check=True)
+def sh(args: Sequence[Union[str, Path]]) -> None:
+    subprocess.run(args, capture_output=True, check=True)
 
 
 def confirm(prompt: str) -> bool:
