@@ -1,7 +1,8 @@
 import decimal
 import re
+import sys
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, NoReturn, Optional, Union
 
 from . import colors
 
@@ -14,7 +15,8 @@ class BatchOpSyntaxError(BatchOpError):
     pass
 
 
-class BatchOpImpossibleError(BatchOpError):
+# not a subclass of BatchOpError as it should not be caught
+class BatchOpImpossibleError(Exception):
     pass
 
 
@@ -48,3 +50,8 @@ def plural(n: int, s: str, ss: str = "", color: bool = False) -> str:
         n_s = colors.number(n_s)
 
     return f"{n_s} {s}" if n == 1 else f"{n_s} {ss}"
+
+
+def err_and_bail(msg: Any) -> NoReturn:
+    print(f"{colors.danger('error:')} {msg}", file=sys.stderr)
+    sys.exit(1)

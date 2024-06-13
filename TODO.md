@@ -13,6 +13,7 @@
 - `run` command
     - `run cat on <fileset>`
 - `count lines` command
+- `gc`/`cleanup` command
 - `.gitignore` support
     - (if current directory has .git, apply .gitignore)
     - probably also ignore hidden files by default
@@ -31,6 +32,8 @@
         - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"
 - `--verbose` flag
 - simple optimizer for filter order (drop `FilterTrue`, put most restrictive filters first, remove duplicates)
+- handle non-UTF8 file names
+- respect `NO_COLOR`
 
 ## More filters
 - `X or Y` filter

@@ -1,4 +1,8 @@
+from typing import List
+
+from . import colors
 from .common import BatchOpError, plural
+from .db import Invocation, InvocationOp
 
 
 def confirm_delete_n_files(nfiles: int, ndirs: int, nbytes: int) -> str:
@@ -23,3 +27,11 @@ def confirm_rename_n_files(nfiles: int) -> str:
     # TODO: give more information
     s1 = plural(nfiles, "file", color=True)
     return f"Rename {s1}? "
+
+
+def confirm_undo(invocation: Invocation, ops: List[InvocationOp]) -> str:
+    # assumption: `ops` is not empty
+    # TODO: handle empty cmdline
+    # TODO: show time command was run and warn if it was a while ago
+    s1 = plural(len(ops), "op", color=True)
+    return f"Undo `{colors.code(invocation.cmdline)}` command with {s1}? "

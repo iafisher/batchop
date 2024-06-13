@@ -1,36 +1,5 @@
-"""
-Supported operations:
-
-- delete <fileset>
-- rename <pattern1> <pattern2>
-- move <fileset> <destination>
-- list <fileset>
-- replace <pattern1> <pattern2> <fileset>
-- run <cmd> <fileset>
-
-Python interface:
-
-    bop = BatchOp()
-    bop.delete(FileSet().is_empty().is_folder().is_named("Archive"))
-
-Command-line interface:
-
-    $ batchop 'delete all folders named "Archive" that are not empty'
-    $ batchop 'rename %_trip.jpg to %.jpg'
-
-Interactive interface:
-
-    $ batchop
-    671 files, 17 folders
-    > is a file
-    671 files
-    > ends with .md
-    534 files
-    > move to markdown-files
-
-"""
-
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -38,8 +7,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Sequence, Union
 
-from . import colors, english, filters, globreplace, parsing
-from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike, plural
+from . import english, filters, globreplace, parsing
+from .common import (
+    BatchOpError,
+    BatchOpImpossibleError,
+    BatchOpSyntaxError,
+    PathLike,
+    err_and_bail,
+    plural,
+)
+from .db import (
+    Database,
+    InvocationOp,
+    INVOCATION_CONTEXT_CLI,
+    INVOCATION_CONTEXT_PYTHON,
+    OP_TYPE_DELETE,
+    OP_TYPE_RENAME,
+)
 from .fileset import FileSet, RecurseBehavior
 from .filters import Filter
 
@@ -65,19 +49,22 @@ def main() -> None:
     parser.add_argument("words", nargs="*")
     args = parser.parse_args()
 
-    if len(args.words) > 0:
-        words = args.words[0] if len(args.words) == 1 else args.words
-        main_execute(
-            words,
-            directory=args.directory,
-            dry_run=args.dry_run,
-            require_confirm=not args.no_confirm,
-            special_files=args.special_files,
-        )
-    else:
-        main_interactive(
-            args.directory, dry_run=args.dry_run, special_files=args.special_files
-        )
+    try:
+        if len(args.words) > 0:
+            words = args.words[0] if len(args.words) == 1 else args.words
+            main_execute(
+                words,
+                directory=args.directory,
+                dry_run=args.dry_run,
+                require_confirm=not args.no_confirm,
+                special_files=args.special_files,
+            )
+        else:
+            main_interactive(
+                args.directory, dry_run=args.dry_run, special_files=args.special_files
+            )
+    except BatchOpError as e:
+        err_and_bail(e)
 
 
 def main_execute(
@@ -87,20 +74,22 @@ def main_execute(
     require_confirm: bool,
     dry_run: bool = False,
     special_files: bool = False,
+    context: str = INVOCATION_CONTEXT_CLI,
 ) -> None:
     root = path_or_default(directory).absolute()
+    original_cmdline = words if isinstance(words, str) else " ".join(words)
+    parsed_cmd = parsing.parse_command(words, cwd=root)
 
-    try:
-        parsed_cmd = parsing.parse_command(words, cwd=root)
-    except BatchOpSyntaxError as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    bop = BatchOp()
+    bop = BatchOp(context=context)
     if isinstance(parsed_cmd, parsing.UnaryCommand):
         fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
         if parsed_cmd.command == "delete":
-            bop.delete(fileset, dry_run=dry_run, require_confirm=require_confirm)
+            bop.delete(
+                fileset,
+                dry_run=dry_run,
+                require_confirm=require_confirm,
+                original_cmdline=original_cmdline,
+            )
         elif parsed_cmd.command == "list":
             cwd = Path(".").absolute()
             if fileset.root == cwd:
@@ -112,6 +101,8 @@ def main_execute(
         elif parsed_cmd.command == "count":
             n = bop.count(fileset)
             print(n)
+        elif parsed_cmd.command == "undo":
+            bop.undo(require_confirm=require_confirm)
         else:
             parsing.err_unknown_command(parsed_cmd.command)
     elif isinstance(parsed_cmd, parsing.RenameCommand):
@@ -203,6 +194,17 @@ def main_interactive(
 
 
 class BatchOp:
+    # this is BatchOp's bookkeeping directory, not the directory the user is querying
+    directory: Path
+    db: Database
+
+    _BACKUP_DIR = "backup"
+
+    def __init__(self, *, context: str = INVOCATION_CONTEXT_PYTHON) -> None:
+        self.directory = self._ensure_directory()
+        self.db = Database(self.directory, context=context)
+        self.db.create_tables()
+
     def list(self, fileset: FileSet) -> Generator[Path, None, None]:
         yield from list(fileset.resolve())
 
@@ -210,7 +212,12 @@ class BatchOp:
         return sum(1 for _ in fileset.resolve())
 
     def delete(
-        self, fileset: FileSet, *, dry_run: bool = False, require_confirm: bool = True
+        self,
+        fileset: FileSet,
+        *,
+        dry_run: bool = False,
+        require_confirm: bool = True,
+        original_cmdline: str = "",
     ) -> None:
         # TODO: avoid computing entire file-set twice?
         # TODO: use `du` command if available
@@ -220,7 +227,7 @@ class BatchOp:
         nbytes = size.size_in_bytes
 
         if nfiles == 0 and ndirs == 0:
-            return
+            raise BatchOpError("nothing to delete")
 
         # TODO: option to list files
         prompt = english.confirm_delete_n_files(nfiles, ndirs, nbytes)
@@ -228,13 +235,63 @@ class BatchOp:
             print("Aborted.")
             return
 
+        invocation_id = self.db.create_invocation(original_cmdline, undoable=True)
+        i = 1
+
         # TODO: pass paths to `rm` in batches
         for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
+            new_path = self.directory / self._BACKUP_DIR / f"{invocation_id}___{i:0>8}"
+            i += 1
+            self.db.create_invocation_op(invocation_id, OP_TYPE_DELETE, p, new_path)
             # TODO: cross-platform
-            if p.is_dir():
-                sh(["rm", "-rf", p], dry_run=dry_run)
+            sh(["mv", p, new_path])
+            # if p.is_dir():
+            #     sh(["rm", "-rf", p], dry_run=dry_run)
+            # else:
+            #     sh(["rm", p], dry_run=dry_run)
+
+    def undo(self, *, require_confirm: bool = True) -> None:
+        # TODO: confirmation
+
+        invocation, invocation_ops = self.db.get_last_invocation()
+        if invocation is None:
+            # TODO: better message
+            raise BatchOpError("no previous command found")
+        if not invocation.undoable:
+            # TODO: better message
+            raise BatchOpError("last command was not undo-able")
+        if len(invocation_ops) == 0:
+            # TODO: better message
+            raise BatchOpError("nothing to undo")
+
+        prompt = english.confirm_undo(invocation, invocation_ops)
+        if require_confirm and not confirm(prompt):
+            print("Aborted.")
+            return
+
+        for op in invocation_ops:
+            if op.op_type == OP_TYPE_DELETE:
+                self._undo_delete(op)
+            elif op.op_type == OP_TYPE_RENAME:
+                self._undo_rename(op)
             else:
-                sh(["rm", p], dry_run=dry_run)
+                raise BatchOpImpossibleError
+
+        self.db.delete_invocation(invocation.invocation_id)
+
+    def _undo_delete(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            # TODO: check for collision?
+            sh(["mv", op.path_after, op.path_before])
+
+        # TODO: what to do if path_after doesn't exist?
+        # could be innocuous, e.g. previous 'undo' command failed midway but some paths were already
+        # restored
+
+    def _undo_rename(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            # TODO: check for collision?
+            sh(["mv", op.path_after, op.path_before])
 
     def rename(
         self,
@@ -267,6 +324,29 @@ class BatchOp:
 
             # TODO: cross-platform
             sh(["mv", "-n", p, p.parent / new_name], dry_run=dry_run)
+
+    @classmethod
+    def _ensure_directory(cls) -> Path:
+        d = cls._choose_directory()
+        d.mkdir(exist_ok=True)
+        (d / cls._BACKUP_DIR).mkdir(exist_ok=True)
+        return d
+
+    @classmethod
+    def _choose_directory(cls) -> Path:
+        env_batch_dir = os.environ.get("BATCHOP_DIR")
+        if env_batch_dir is not None:
+            return Path(env_batch_dir).absolute()
+
+        env_xdg_data_home = os.environ.get("XDG_DATA_HOME")
+        if env_xdg_data_home is not None:
+            return Path(env_xdg_data_home).absolute() / "batchop"
+
+        local_share = Path.home() / ".local" / "share"
+        if local_share.exists() and local_share.is_dir():
+            return local_share / "batchop"
+
+        return Path.home() / ".batchop"
 
 
 def sh(args: Sequence[Union[str, Path]], *, dry_run: bool = False) -> None:

@@ -37,6 +37,10 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     if command in ("count", "delete", "list"):
         filters = parse_np_and_preds(tokens, cwd=cwd)
         return UnaryCommand(command=command, filters=filters)
+    elif command == "undo":
+        # TODO: handle trailing input
+        # TODO: should probably not reuse UnaryCommand for this
+        return UnaryCommand(command=command, filters=[])
     elif command == "rename":
         return parse_rename_command(tokens)
     else:
