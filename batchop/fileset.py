@@ -1,11 +1,12 @@
 import dataclasses
 import decimal
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List
 
 from . import filters
-from .common import BatchOpError, NumberLike, PathLike, unit_to_multiple
+from .common import BatchOpError, NumberLike, PathLike, PatternLike, unit_to_multiple
 from .filters import Filter
 
 
@@ -79,13 +80,25 @@ class FileSet:
         return self.copy_with(filters.FilterIsEmpty())
 
     def is_not_empty(self) -> "FileSet":
-        return self.copy_with(filters.FilterNegated(filters.FilterIsEmpty()))
+        return self.copy_with(filters.FilterIsEmpty().negate())
 
-    def is_named(self, pattern: str) -> "FileSet":
-        return self.copy_with(filters.FilterIsNamed(pattern))
+    def is_like(self, pattern: str) -> "FileSet":
+        return self.copy_with(filters.FilterIsLike(pattern))
 
-    def is_not_named(self, pattern: str) -> "FileSet":
-        return self.copy_with(filters.FilterNegated(filters.FilterIsNamed(pattern)))
+    def is_not_like(self, pattern: str) -> "FileSet":
+        return self.copy_with(filters.FilterIsLike(pattern).negate())
+
+    def matches(self, pattern: PatternLike) -> "FileSet":
+        if isinstance(pattern, str):
+            pattern = re.compile(pattern)
+
+        return self.copy_with(filters.FilterMatches(pattern))
+
+    def does_not_match(self, pattern: PatternLike) -> "FileSet":
+        if isinstance(pattern, str):
+            pattern = re.compile(pattern)
+
+        return self.copy_with(filters.FilterMatches(pattern).negate())
 
     def is_in(self, path_like: PathLike) -> "FileSet":
         path = self._normalize_path(path_like)

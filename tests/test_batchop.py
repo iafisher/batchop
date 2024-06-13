@@ -1,15 +1,22 @@
 import decimal
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, List, Optional
 
-from batchop import patterns
-from batchop.batchop import BatchOp
+from batchop import globreplace, patterns
+from batchop.batchop import BatchOp, main_execute
 from batchop.fileset import FileSet
 from batchop.filters import FilterIsFile, FilterIsFolder
-from batchop.parsing import PhraseMatch, parse_command, tokenize, try_phrase_match
+from batchop.parsing import (
+    PhraseMatch,
+    RenameCommand,
+    parse_command,
+    tokenize,
+    try_phrase_match,
+)
 
 
 class TestCommandParsing(unittest.TestCase):
@@ -25,6 +32,10 @@ class TestCommandParsing(unittest.TestCase):
         cmd = parse_command("delete folders")
         self.assertEqual(cmd.command, "delete")
         self.assertEqual(cmd.filters, [FilterIsFolder()])
+
+    def test_rename_command(self):
+        cmd = parse_command("rename '*.md' to '#1.md'")
+        self.assertEqual(cmd, RenameCommand("*.md", "#1.md"))
 
 
 class TestPatternMatching(unittest.TestCase):
@@ -110,7 +121,25 @@ class TestTokenize(unittest.TestCase):
         self.assertEqual(tokenize("10kb"), ["10kb"])
 
 
-class TestListCommand(unittest.TestCase):
+class TestGlobReplace(unittest.TestCase):
+    def test_glob_to_regex(self):
+        self.assertEqual(globreplace.glob_to_regex("*.md"), r"^(.+?)\.md$")
+        self.assertEqual(
+            globreplace.glob_to_regex("*.* *.md"), r"^(.+?)\.(.+?)\ (.+?)\.md$"
+        )
+        self.assertEqual(globreplace.glob_to_regex("*.*"), r"^(.+?)\.(.+?)$")
+
+    def test_glob_to_regex_repl(self):
+        self.assertEqual(globreplace.glob_to_regex_repl("#1 #2.#3"), r"\1 \2.\3")
+
+    def test_glob_replacement(self):
+        p = globreplace.glob_to_regex("B*.* *.md")
+        repl = globreplace.glob_to_regex_repl("book #1 #3.md")
+        r = re.sub(p, repl, "B2024.05 Underworld.md")
+        self.assertEqual(r, "book 2024 Underworld.md")
+
+
+class BaseTmpDir(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         create_file_tree(self.tmpdir.name)
@@ -120,6 +149,14 @@ class TestListCommand(unittest.TestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
+    def assert_file_exists(self, path):
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir.name, path)))
+
+    def assert_file_not_exists(self, path):
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir.name, path)))
+
+
+class TestListCommand(BaseTmpDir):
     def test_list_all(self):
         self.assert_paths_equal(
             self.bop.list(self.fs),
@@ -197,6 +234,33 @@ class TestListCommand(unittest.TestCase):
         self.assertEqual(list(sorted(actual)), list(sorted(expected)))
 
 
+class TestRenameCommand(BaseTmpDir):
+    def test_rename_pride_and_prejudice(self):
+        main_execute(
+            "rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt",
+            directory=self.tmpdir.name,
+            require_confirm=False,
+        )
+
+        self.assert_file_exists("pride-and-prejudice/ch1.txt")
+        self.assert_file_exists("pride-and-prejudice/ch2.txt")
+
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+
+
+RESOURCES = Path(__file__).absolute().parent / "resources"
+FILE_TREE = {
+    "constitution.txt": None,
+    "empty_dir": {},
+    "empty_file.txt": None,
+    "pride-and-prejudice": {
+        "pride-and-prejudice-ch1.txt": None,
+        "pride-and-prejudice-ch2.txt": None,
+    },
+}
+
+
 def create_file_tree(root):
     create_file_tree_from_template(root, FILE_TREE)
 
@@ -211,15 +275,3 @@ def create_file_tree_from_template(root, t):
             contents = (RESOURCES / name).read_text()
             with open(path, "w") as f:
                 f.write(contents)
-
-
-RESOURCES = Path(__file__).absolute().parent / "resources"
-FILE_TREE = {
-    "constitution.txt": None,
-    "empty_dir": {},
-    "empty_file.txt": None,
-    "pride-and-prejudice": {
-        "pride-and-prejudice-ch1.txt": None,
-        "pride-and-prejudice-ch2.txt": None,
-    },
-}

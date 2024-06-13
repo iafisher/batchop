@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, List, NoReturn, Optional, Tuple
+from typing import Any, List, NoReturn, Optional, Tuple, Union
 
 from . import filters
 from .common import BatchOpImpossibleError, BatchOpSyntaxError
@@ -8,9 +8,18 @@ from .patterns import PATTERNS, BasePattern
 
 
 @dataclass
-class ParsedCommand:
+class UnaryCommand:
     command: str
     filters: List[Filter]
+
+
+@dataclass
+class RenameCommand:
+    old: str
+    new: str
+
+
+ParsedCommand = Union[UnaryCommand, RenameCommand]
 
 
 def parse_command(cmdstr: str) -> ParsedCommand:
@@ -22,9 +31,20 @@ def parse_command(cmdstr: str) -> ParsedCommand:
 
     if command in ("count", "delete", "list"):
         filters = parse_np_and_preds(tokens)
-        return ParsedCommand(command=command, filters=filters)
+        return UnaryCommand(command=command, filters=filters)
+    elif command == "rename":
+        return parse_rename_command(tokens)
     else:
         err_unknown_command(command)
+
+
+def parse_rename_command(tokens: List[str]) -> RenameCommand:
+    if len(tokens) != 3 and tokens[1].lower() != "to":
+        print(tokens)
+        # TODO: more helpful error message
+        raise BatchOpSyntaxError("could not parse `rename` command")
+
+    return RenameCommand(tokens[0], tokens[2])
 
 
 def parse_np_and_preds(tokens: List[str]) -> List[Filter]:

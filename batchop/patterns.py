@@ -163,10 +163,15 @@ PATTERNS = [
         ],
         filters.FilterIsFolder,
     ),
-    # 'that is named X'
+    # 'that is like X'
     (
-        [Opt(AnyLit(["is", "are"])), Not(), Lit("named"), String()],
-        filters.FilterIsNamed,
+        [Opt(Lit("that")), Opt(AnyLit(["is", "are"])), Not(), Lit("like"), String()],
+        filters.FilterIsLike,
+    ),
+    # 'that matches X'
+    (
+        [Opt(Lit("that")), Lit("matches"), String()],
+        filters.FilterMatches,
     ),
     # 'that is empty'
     (

@@ -5,6 +5,7 @@
     - `move <fileset> to <dest>`
 - `replace` command
     - `replace "foo" with "bar" in <fileset>`
+- shortcut for single replacement: `rename "*.md" to "*.mdx"` instead of `rename "*.md" to "#1.mdx"`
 - `run` command
     - `run cat on <fileset>`
 - `count lines` command
@@ -19,6 +20,10 @@
 - support regex patterns for `is in` filter
 - do symlinks work?
 - how to handle special files?
+- shell quoting doesn't work, e.g. `rename '* *.md'` is passed as `['rename', '* *.md']` which becomes `'rename * *.md'` which can no longer be tokenized properly
+    - if one command-line arg, tokenize it
+    - if more than one, treat it as already tokenized?
+        - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?

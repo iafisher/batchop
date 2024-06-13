@@ -1,6 +1,7 @@
 import abc
 import decimal
 import fnmatch
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Union
@@ -77,7 +78,7 @@ class FilterIsEmpty(Filter):
 
 
 @dataclass
-class FilterIsNamed(Filter):
+class FilterIsLike(Filter):
     pattern: str
 
     def test(self, p: Path) -> Result:
@@ -85,7 +86,18 @@ class FilterIsNamed(Filter):
         return fnmatch.fnmatch(p.name, self.pattern)
 
     def __str__(self) -> str:
-        return f"is named {self.pattern!r}"
+        return f"is like {self.pattern!r}"
+
+
+@dataclass
+class FilterMatches(Filter):
+    pattern: re.Pattern
+
+    def test(self, p: Path) -> Result:
+        return self.pattern.match(p.name) is not None
+
+    def __str__(self) -> str:
+        return f"matches regex {self.pattern!r}"
 
 
 @dataclass

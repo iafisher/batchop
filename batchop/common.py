@@ -1,4 +1,5 @@
 import decimal
+import re
 from pathlib import Path
 from typing import Optional, Union
 
@@ -17,6 +18,7 @@ class BatchOpImpossibleError(BatchOpError):
 
 PathLike = Union[str, Path]
 NumberLike = Union[int, float, decimal.Decimal, str]
+PatternLike = Union[str, re.Pattern]
 
 
 def unit_to_multiple(unit: str) -> Optional[int]:

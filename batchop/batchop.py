@@ -31,14 +31,15 @@ Interactive interface:
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Union
 
-from . import filters, parsing
-from .common import BatchOpSyntaxError, PathLike
+from . import filters, globreplace, parsing
+from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike
 from .fileset import FileSet
 from .filters import Filter
 
@@ -46,17 +47,22 @@ from .filters import Filter
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
+    parser.add_argument("--no-confirm", action="store_true")
     parser.add_argument("words", nargs="*")
     args = parser.parse_args()
 
     if len(args.words) > 0:
         cmdstr = " ".join(args.words)
-        main_execute(cmdstr, directory=args.directory)
+        main_execute(
+            cmdstr, directory=args.directory, require_confirm=not args.no_confirm
+        )
     else:
         main_interactive(args.directory)
 
 
-def main_execute(cmdstr: str, *, directory: Optional[str]) -> None:
+def main_execute(
+    cmdstr: str, *, directory: Optional[str], require_confirm: bool
+) -> None:
     try:
         parsed_cmd = parsing.parse_command(cmdstr)
     except BatchOpSyntaxError as e:
@@ -64,17 +70,25 @@ def main_execute(cmdstr: str, *, directory: Optional[str]) -> None:
         sys.exit(1)
 
     bop = BatchOp()
-    fileset = FileSet(path_or_default(directory), parsed_cmd.filters)
-    if parsed_cmd.command == "delete":
-        bop.delete(fileset)
-    elif parsed_cmd.command == "list":
-        for p in bop.list(fileset):
-            print(p)
-    elif parsed_cmd.command == "count":
-        n = bop.count(fileset)
-        print(n)
+    if isinstance(parsed_cmd, parsing.UnaryCommand):
+        fileset = FileSet(path_or_default(directory), parsed_cmd.filters)
+        if parsed_cmd.command == "delete":
+            bop.delete(fileset, require_confirm=require_confirm)
+        elif parsed_cmd.command == "list":
+            for p in bop.list(fileset):
+                print(p)
+        elif parsed_cmd.command == "count":
+            n = bop.count(fileset)
+            print(n)
+        else:
+            parsing.err_unknown_command(parsed_cmd.command)
+    elif isinstance(parsed_cmd, parsing.RenameCommand):
+        fileset = FileSet(path_or_default(directory))
+        bop.rename(
+            fileset, parsed_cmd.old, parsed_cmd.new, require_confirm=require_confirm
+        )
     else:
-        parsing.err_unknown_command(parsed_cmd.command)
+        raise BatchOpImpossibleError
 
 
 def main_interactive(d: Optional[str]) -> None:
@@ -151,7 +165,7 @@ class BatchOp:
     def count(self, fileset: FileSet) -> int:
         return sum(1 for _ in fileset.resolve())
 
-    def delete(self, fileset: FileSet) -> None:
+    def delete(self, fileset: FileSet, *, require_confirm: bool = True) -> None:
         # TODO: avoid computing entire file-set twice?
         size = fileset.calculate_size()
         nfiles = size.file_count
@@ -165,7 +179,7 @@ class BatchOp:
             f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'folder')} "
             + f"totaling {plural(nbytes, 'byte')}? "
         )
-        if not confirm(prompt):
+        if require_confirm and not confirm(prompt):
             print("Aborted.")
             return
 
@@ -174,10 +188,33 @@ class BatchOp:
         # TODO: pass paths to `rm` in batches
         for p in fileset.resolve():
             # TODO: enable rm
-            sh(["echo", "rm", "-rf", str(p)])
+            sh(["echo", "rm", "-rf", p])
+
+    def rename(
+        self, fileset: FileSet, old: str, new: str, *, require_confirm: bool = True
+    ) -> None:
+        # TODO: detect name collisions
+        pattern = re.compile(globreplace.glob_to_regex(old))
+        repl = globreplace.glob_to_regex_repl(new)
+
+        fileset = fileset.matches(pattern)
+
+        size = fileset.calculate_size()
+        nfiles = size.file_count
+        # TODO: give more information
+        if require_confirm and not confirm(f"Rename {plural(nfiles, 'file')}? "):
+            print("Aborted.")
+            return
+
+        for p in fileset.resolve():
+            new_name = pattern.sub(repl, p.name)
+            if new_name == p.name:
+                continue
+
+            sh(["mv", "-n", p, p.parent / new_name])
 
 
-def sh(args: List[str]) -> None:
+def sh(args: List[Union[str, Path]]) -> None:
     subprocess.run(args, capture_output=True, check=True)
 
 
