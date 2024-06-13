@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Union
 
-from . import filters, globreplace, parsing
+from . import colors, english, filters, globreplace, parsing
 from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike, plural
 from .fileset import FileSet
 from .filters import Filter
@@ -123,9 +123,11 @@ def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
         # TODO: default to ignoring .git + .gitignore?
         if recalculate:
             size = fs.calculate_size()
-            print(f"{plural(size.file_count, 'file')}", end="")
+            print(f"{plural(size.file_count, 'file', color=True)}", end="")
             if size.directory_count > 0:
-                print(f", {plural(size.directory_count, 'directory', 'directories')}")
+                print(
+                    f", {plural(size.directory_count, 'directory', 'directories', color=True)}"
+                )
             else:
                 print()
 
@@ -184,18 +186,17 @@ class BatchOp:
 
     def delete(self, fileset: FileSet, *, require_confirm: bool = True) -> None:
         # TODO: avoid computing entire file-set twice?
+        # TODO: use `du` command if available
         size = fileset.calculate_size()
         nfiles = size.file_count
         ndirs = size.directory_count
         nbytes = size.size_in_bytes
-        # TODO: don't print counts if 0
-        # TODO: human-readable size units
+
+        if nfiles == 0 and ndirs == 0:
+            return
+
         # TODO: option to list files
-        # TODO: use `du` command if available
-        prompt = (
-            f"Delete {plural(nfiles, 'file')} and {plural(ndirs, 'directory', 'directories')} "
-            + f"totaling {plural(nbytes, 'byte')}? "
-        )
+        prompt = english.confirm_delete_n_files(nfiles, ndirs, nbytes)
         if require_confirm and not confirm(prompt):
             print("Aborted.")
             return
@@ -219,8 +220,10 @@ class BatchOp:
 
         size = fileset.calculate_size()
         nfiles = size.file_count
-        # TODO: give more information
-        if require_confirm and not confirm(f"Rename {plural(nfiles, 'file')}? "):
+        if nfiles == 0:
+            return
+
+        if require_confirm and not confirm(english.confirm_rename_n_files(nfiles)):
             print("Aborted.")
             return
 

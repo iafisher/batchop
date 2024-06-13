@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 from typing import Optional, Union
 
+from . import colors
+
 
 class BatchOpError(Exception):
     pass
@@ -37,8 +39,12 @@ def unit_to_multiple(unit: str) -> Optional[int]:
         return None
 
 
-def plural(n: int, s: str, ss: str = "") -> str:
+def plural(n: int, s: str, ss: str = "", color: bool = False) -> str:
     if not ss:
         ss = s + "s"
 
-    return f"1 {s}" if n == 1 else f"{n:,} {ss}"
+    n_s = f"{n:,}"
+    if color:
+        n_s = colors.number(n_s)
+
+    return f"{n_s} {s}" if n == 1 else f"{n_s} {ss}"
