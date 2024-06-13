@@ -243,6 +243,16 @@ class TestListCommand(BaseTmpDir):
             ],
         )
 
+    def test_list_like(self):
+        fs = self.fs.is_like("p*ch?.txt")
+        self.assert_paths_equal(
+            self.bop.list(fs),
+            [
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
     def assert_paths_equal(self, actual, expected):
         expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]
         self.assertEqual(list(sorted(actual)), list(sorted(expected)))

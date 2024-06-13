@@ -122,10 +122,10 @@ class FileSet:
         return self.copy_with(filters.FilterIsEmpty().negate())
 
     def is_like(self, pattern: str) -> "FileSet":
-        return self.copy_with(filters.FilterIsLike(pattern))
+        return self.copy_with(filters.glob_pattern_to_filter(pattern))
 
     def is_not_like(self, pattern: str) -> "FileSet":
-        return self.copy_with(filters.FilterIsLike(pattern).negate())
+        return self.copy_with(filters.glob_pattern_to_filter(pattern).negate())
 
     def matches(self, pattern: PatternLike) -> "FileSet":
         if isinstance(pattern, str):

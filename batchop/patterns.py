@@ -173,7 +173,7 @@ PATTERNS = [
     # 'that is like X'
     Description(
         [Opt(Lit("that")), Opt(AnyLit(["is", "are"])), Not(), Lit("like"), String()],
-        filters.FilterIsLike,
+        filters.glob_pattern_to_filter,
     ),
     # 'that matches X'
     Description(

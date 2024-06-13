@@ -108,7 +108,7 @@ class FilterIs(Filter):
 
 
 @dataclass
-class FilterIsLike(Filter):
+class FilterIsLikePath(Filter):
     pattern: str
 
     def test(self, p: Path) -> Result:
@@ -116,7 +116,19 @@ class FilterIsLike(Filter):
         return fnmatch.fnmatch(p, self.pattern)  # type: ignore
 
     def __str__(self) -> str:
-        return f"is like {self.pattern!r}"
+        return f"is like {self.pattern!r} (whole-path)"
+
+
+@dataclass
+class FilterIsLikeName(Filter):
+    pattern: str
+
+    def test(self, p: Path) -> Result:
+        # TODO: case-insensitive file systems?
+        return fnmatch.fnmatch(p.name, self.pattern)  # type: ignore
+
+    def __str__(self) -> str:
+        return f"is like {self.pattern!r} (name only)"
 
 
 @dataclass
@@ -270,6 +282,13 @@ class FilterHasExtension(Filter):
         return f"has extension {self.ext!r}"
 
 
+def glob_pattern_to_filter(s: str):
+    if "/" in s:
+        return FilterIsLikePath(s)
+    else:
+        return FilterIsLikeName(s)
+
+
 def pattern_to_filter(s: str, *, cwd: Path) -> Filter:
     # delete '*.md'        -- glob pattern
     # delete /.*\\.md/     -- regex
@@ -277,7 +296,7 @@ def pattern_to_filter(s: str, *, cwd: Path) -> Filter:
     if s.startswith("/") and s.endswith("/"):
         return FilterMatches(re.compile(s[1:-1]))
     elif "*" in s or "?" in s or "[" in s:
-        return FilterIsLike(s)
+        return glob_pattern_to_filter(s)
     else:
         p = Path(s)
         if not p.is_absolute():

@@ -3,7 +3,7 @@
 
 ## Features
 - ~~`rename` command (needs design)~~
-- `trash` command
+- ~~`trash` command~~
 - `undo` command
 - `move` command
     - `move <fileset> to <dest>`
@@ -31,7 +31,11 @@
     - if more than one, treat it as already tokenized?
         - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"
 - `--verbose` flag
-- simple optimizer for filter order (drop `FilterTrue`, put most restrictive filters first, remove duplicates)
+- simple optimizer for filter order
+    - drop `FilterTrue`
+    - put most restrictive filters first
+    - remove duplicates
+    - if `is in` filter then set that to the root
 - handle non-UTF8 file names
 - respect `NO_COLOR`
 
