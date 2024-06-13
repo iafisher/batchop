@@ -36,7 +36,7 @@ class FileSet:
     def __init__(
         self, root: PathLike, filters: List[Filter] = [], *, special_files: bool = False
     ) -> None:
-        self.root = Path(root)
+        self.root = Path(root).absolute()
         self.filters = filters
         self.special_files = special_files
 
@@ -141,7 +141,7 @@ class FileSet:
 
     def is_in(self, path_like: PathLike) -> "FileSet":
         path = self._normalize_path(path_like)
-        return self.copy_with(filters.FilterIsInPath(path))
+        return self.copy_with(filters.FilterIsInPath(path, cwd=self.root))
 
     def is_in_glob(self, pattern: str) -> "FileSet":
         raise NotImplementedError
@@ -151,7 +151,7 @@ class FileSet:
 
     def is_not_in(self, path_like: PathLike) -> "FileSet":
         path = self._normalize_path(path_like)
-        return self.copy_with(filters.FilterIsNotInPath(path))
+        return self.copy_with(filters.FilterIsNotInPath(path, cwd=self.root))
 
     def is_not_in_glob(self, pattern: str) -> "FileSet":
         raise NotImplementedError

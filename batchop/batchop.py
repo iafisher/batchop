@@ -88,22 +88,27 @@ def main_execute(
     dry_run: bool = False,
     special_files: bool = False,
 ) -> None:
+    root = path_or_default(directory).absolute()
+
     try:
-        parsed_cmd = parsing.parse_command(words)
+        parsed_cmd = parsing.parse_command(words, cwd=root)
     except BatchOpSyntaxError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
 
     bop = BatchOp()
     if isinstance(parsed_cmd, parsing.UnaryCommand):
-        fileset = FileSet(
-            path_or_default(directory), parsed_cmd.filters, special_files=special_files
-        )
+        fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
         if parsed_cmd.command == "delete":
             bop.delete(fileset, dry_run=dry_run, require_confirm=require_confirm)
         elif parsed_cmd.command == "list":
-            for p in bop.list(fileset):
-                print(p)
+            cwd = Path(".").absolute()
+            if fileset.root == cwd:
+                for p in bop.list(fileset):
+                    print(p.relative_to(cwd))
+            else:
+                for p in bop.list(fileset):
+                    print(p)
         elif parsed_cmd.command == "count":
             n = bop.count(fileset)
             print(n)
@@ -127,7 +132,7 @@ def main_interactive(
 ) -> None:
     import readline
 
-    root = path_or_default(d)
+    root = path_or_default(d).absolute()
     fs = FileSet(root, special_files=special_files).is_not_hidden()
 
     if len(fs.filters) > 0:
@@ -192,7 +197,7 @@ def main_interactive(
             continue
 
         tokens = parsing.tokenize(s)
-        filters = parsing.parse_preds(tokens)
+        filters = parsing.parse_preds(tokens, cwd=root)
         fs.filters.extend(filters)
         recalculate = True
 

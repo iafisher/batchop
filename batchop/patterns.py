@@ -140,9 +140,16 @@ class SizeUnit(BasePattern):
         return WordMatch(captured=captured)
 
 
+@dataclass
+class Description:
+    patterns: List[BasePattern]
+    filter_constructor: Any
+    pass_cwd: bool = False
+
+
 PATTERNS = [
     # 'that is a file'
-    (
+    Description(
         [
             Opt(Lit("that")),
             AnyLit(["is", "are"]),
@@ -153,7 +160,7 @@ PATTERNS = [
         filters.FilterIsFile,
     ),
     # 'that is a folder'
-    (
+    Description(
         [
             Opt(Lit("that")),
             AnyLit(["is", "are"]),
@@ -164,36 +171,36 @@ PATTERNS = [
         filters.FilterIsDirectory,
     ),
     # 'that is like X'
-    (
+    Description(
         [Opt(Lit("that")), Opt(AnyLit(["is", "are"])), Not(), Lit("like"), String()],
         filters.FilterIsLike,
     ),
     # 'that matches X'
-    (
+    Description(
         [Opt(Lit("that")), Lit("matches"), String()],
         filters.FilterMatches,
     ),
     # 'that is empty'
-    (
+    Description(
         [Opt(Lit("that")), AnyLit(["is", "are"]), Not(), Lit("empty")],
         filters.FilterIsEmpty,
     ),
     # '> X bytes'
-    ([AnyLit([">", "gt"]), SizeUnit()], filters.FilterSizeGreater),
+    Description([AnyLit([">", "gt"]), SizeUnit()], filters.FilterSizeGreater),
     # '>= X bytes'
-    (
+    Description(
         [AnyLit([">=", "gte", "ge"]), SizeUnit()],
         filters.FilterSizeGreaterEqual,
     ),
     # '< X bytes'
-    ([AnyLit(["<", "lt"]), SizeUnit()], filters.FilterSizeLess),
+    Description([AnyLit(["<", "lt"]), SizeUnit()], filters.FilterSizeLess),
     # '<= X bytes'
-    (
+    Description(
         [AnyLit(["<=", "lte", "le"]), SizeUnit()],
         filters.FilterSizeLessEqual,
     ),
     # 'that is in X'
-    (
+    Description(
         [
             Opt(Lit("that")),
             Opt(AnyLit(["is", "are"])),
@@ -203,14 +210,15 @@ PATTERNS = [
         ],
         # TODO: support glob and regex
         filters.FilterIsInPath,
+        pass_cwd=True,
     ),
     # 'that is hidden'
-    (
+    Description(
         [Opt(Lit("that")), Opt(AnyLit(["is", "are"])), Not(), Lit("hidden")],
         filters.FilterIsHidden,
     ),
     # 'that has extension X'
-    (
+    Description(
         [
             Opt(Lit("that")),
             AnyLit(["has", "have"]),
@@ -220,7 +228,7 @@ PATTERNS = [
         filters.FilterHasExtension,
     ),
     # 'with extension X'
-    (
+    Description(
         [
             Lit("with"),
             AnyLit(["ext", "extension"]),

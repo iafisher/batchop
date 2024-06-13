@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, NoReturn, Optional, Tuple, Union
 
 from . import filters
@@ -22,7 +23,7 @@ class RenameCommand:
 ParsedCommand = Union[UnaryCommand, RenameCommand]
 
 
-def parse_command(words: Union[str, List[str]]) -> ParsedCommand:
+def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     if isinstance(words, str):
         tokens = tokenize(words)
     else:
@@ -34,7 +35,7 @@ def parse_command(words: Union[str, List[str]]) -> ParsedCommand:
     command = tokens.pop(0).lower()
 
     if command in ("count", "delete", "list"):
-        filters = parse_np_and_preds(tokens)
+        filters = parse_np_and_preds(tokens, cwd=cwd)
         return UnaryCommand(command=command, filters=filters)
     elif command == "rename":
         return parse_rename_command(tokens)
@@ -50,23 +51,27 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
     return RenameCommand(tokens[0], tokens[2])
 
 
-def parse_np_and_preds(tokens: List[str]) -> List[Filter]:
+def parse_np_and_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
     filters = parse_np(tokens)
-    filters.extend(parse_preds(tokens))
+    filters.extend(parse_preds(tokens, cwd=cwd))
     return filters
 
 
-def parse_preds(tokens: List[str]) -> List[Filter]:
+def parse_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
     filters = []
     i = 0
     while i < len(tokens):
         matched_one = False
-        for pattern, filter_constructor in PATTERNS:
-            m = try_phrase_match(pattern, tokens[i:])
+        for description in PATTERNS:
+            m = try_phrase_match(description.patterns, tokens[i:])
             if m is not None:
                 i += m.tokens_consumed
-                if filter_constructor is not None:
-                    f = filter_constructor(*m.captures)
+                if description.filter_constructor is not None:
+                    if description.pass_cwd:
+                        f = description.filter_constructor(*m.captures, cwd=cwd)
+                    else:
+                        f = description.filter_constructor(*m.captures)
+
                     if m.negated:
                         f = f.negate()
 

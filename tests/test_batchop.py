@@ -21,17 +21,21 @@ from batchop.parsing import (
 
 class TestCommandParsing(unittest.TestCase):
     def test_delete_command(self):
-        cmd = parse_command("delete everything")
+        cwd = Path(".")
+
+        cmd = parse_command("delete everything", cwd=cwd)
         self.assertEqual(cmd, UnaryCommand("delete", []))
 
-        cmd = parse_command("delete anything that is a file")
+        cmd = parse_command("delete anything that is a file", cwd=cwd)
         self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsFile()]))
 
-        cmd = parse_command("delete folders")
+        cmd = parse_command("delete folders", cwd=cwd)
         self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsDirectory()]))
 
     def test_list_command(self):
-        cmd = parse_command("list all empty files")
+        cwd = Path(".")
+
+        cmd = parse_command("list all empty files", cwd=cwd)
         self.assertEqual(
             cmd,
             UnaryCommand(
@@ -41,7 +45,9 @@ class TestCommandParsing(unittest.TestCase):
         )
 
     def test_rename_command(self):
-        cmd = parse_command("rename '*.md' to '#1.md'")
+        cwd = Path(".")
+
+        cmd = parse_command("rename '*.md' to '#1.md'", cwd=cwd)
         self.assertEqual(cmd, RenameCommand("*.md", "#1.md"))
 
 

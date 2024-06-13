@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Union
 
+from .common import PathLike
+
 
 # if tuple, interpreted as (include_self, include_children)
 Result = Union[bool, Tuple[bool, bool]]
@@ -132,11 +134,20 @@ class FilterMatches(Filter):
 class FilterIsInPath(Filter):
     path: Path
 
+    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
+        # TODO: should take Path, not PathLike
+        path = Path(path_like)
+        if not path.is_absolute():
+            self.path = cwd / path
+        else:
+            self.path = path
+
     def test(self, p: Path) -> Result:
         return test_is_in_exact(self.path, p)
 
     def negate(self) -> Filter:
-        return FilterIsNotInPath(self.path)
+        # TODO: `cwd` should be ignored since `self.path` will be absolute, but this is still messy
+        return FilterIsNotInPath(self.path, cwd=Path("."))
 
     def __str__(self) -> str:
         return f"is in {self.path!r}"
@@ -146,12 +157,20 @@ class FilterIsInPath(Filter):
 class FilterIsNotInPath(Filter):
     path: Path
 
+    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
+        # TODO: should take Path, not PathLike
+        path = Path(path_like)
+        if not path.is_absolute():
+            self.path = cwd / path
+        else:
+            self.path = path
+
     def test(self, p: Path) -> Result:
         if test_is_in_exact(self.path, p):
             return (True, False)
         else:
             # assumption: if a parent directory was excluded we never got here in the first place
-            # b/c we passed include_children=False above
+            # b/c we returned include_children=False above
             return True
 
     def __str__(self) -> str:
