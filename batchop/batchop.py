@@ -29,6 +29,7 @@ from .filters import Filter
 
 
 def main() -> None:
+    # TODO: --version flag
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
     parser.add_argument(
