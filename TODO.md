@@ -1,5 +1,5 @@
 ## Bugs
-- preview file/directory count for e.g. `delete .venv` doesn't work
+- ~~preview file/directory count for e.g. `delete .venv` doesn't work~~
 
 ## Features
 - ~~`rename` command (needs design)~~

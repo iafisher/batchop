@@ -1,5 +1,6 @@
 import dataclasses
 import decimal
+import enum
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,16 @@ class FileSetSize:
     size_in_bytes: int
 
 
+class RecurseBehavior(enum.Enum):
+    NORMAL = 1
+    # once we hit a directory that is included, don't recurse into its children
+    # useful for deletion because `rm -rf` just needs to take a directory root
+    EXCLUDE_DIR_CHILDREN = 2
+    # once we hit a directory that is included, include all its children regardless of filters
+    # useful for previewing deletion because any children of directory will be deleted
+    INCLUDE_DIR_CHILDREN = 3
+
+
 class FileSet:
     root: Path
     filters: List[Filter]
@@ -29,10 +40,9 @@ class FileSet:
         self.filters = filters
         self.special_files = special_files
 
-    def resolve(self, *, recurse: bool = True) -> Generator[Path, None, None]:
-        should_recurse_global = recurse
-        del recurse
-
+    def resolve(
+        self, *, recurse: RecurseBehavior = RecurseBehavior.NORMAL
+    ) -> Generator[Path, None, None]:
         all_filters = []
         if not self.special_files:
             all_filters.append(filters.FilterIsSpecial().negate())
@@ -45,24 +55,36 @@ class FileSet:
             # TODO: terminate filter application early if possible
             results = [filters.expand_result(f.test(item)) for f in all_filters]
             should_include = all(include_self for include_self, _ in results)
-            should_recurse_here = all(
-                include_children for _, include_children in results
-            )
+            should_recurse = all(include_children for _, include_children in results)
 
             if should_include:
                 yield item
 
-            if (
-                (should_recurse_global or not should_include)
-                and should_recurse_here
-                and item.is_dir()
-            ):
+            if recurse == RecurseBehavior.EXCLUDE_DIR_CHILDREN:
+                if should_include:
+                    should_recurse = False
+            elif recurse == RecurseBehavior.INCLUDE_DIR_CHILDREN:
+                if should_include and item.is_dir():
+                    yield from self._resolve_unconditional(item)
+                    continue
+
+            if should_recurse and item.is_dir():
                 for child in item.iterdir():
                     stack.append(child)
 
-    def calculate_size(self) -> FileSetSize:
+    def _resolve_unconditional(self, p: Path) -> Generator[Path, None, None]:
+        stack = list(p.iterdir())
+        while stack:
+            item = stack.pop()
+            yield item
+            if item.is_dir():
+                stack.extend(list(item.iterdir()))
+
+    def calculate_size(
+        self, *, recurse: RecurseBehavior = RecurseBehavior.NORMAL
+    ) -> FileSetSize:
         r = FileSetSize(file_count=0, directory_count=0, size_in_bytes=0)
-        for p in self.resolve():
+        for p in self.resolve(recurse=recurse):
             if p.is_dir():
                 r.directory_count += 1
             else:

@@ -36,18 +36,27 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, List, Optional, Union
+from typing import Generator, List, Optional, Sequence, Union
 
 from . import colors, english, filters, globreplace, parsing
 from .common import BatchOpImpossibleError, BatchOpSyntaxError, PathLike, plural
-from .fileset import FileSet
+from .fileset import FileSet, RecurseBehavior
 from .filters import Filter
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
-    parser.add_argument("--no-confirm", action="store_true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what the command would do without doing it.",
+    )
+    parser.add_argument(
+        "--no-confirm",
+        action="store_true",
+        help="Execute the command without confirmation. Not recommended.",
+    )
     parser.add_argument(
         "--special-files",
         action="store_true",
@@ -61,11 +70,14 @@ def main() -> None:
         main_execute(
             words,
             directory=args.directory,
+            dry_run=args.dry_run,
             require_confirm=not args.no_confirm,
             special_files=args.special_files,
         )
     else:
-        main_interactive(args.directory, special_files=args.special_files)
+        main_interactive(
+            args.directory, dry_run=args.dry_run, special_files=args.special_files
+        )
 
 
 def main_execute(
@@ -73,6 +85,7 @@ def main_execute(
     *,
     directory: Optional[str],
     require_confirm: bool,
+    dry_run: bool = False,
     special_files: bool = False,
 ) -> None:
     try:
@@ -87,7 +100,7 @@ def main_execute(
             path_or_default(directory), parsed_cmd.filters, special_files=special_files
         )
         if parsed_cmd.command == "delete":
-            bop.delete(fileset, require_confirm=require_confirm)
+            bop.delete(fileset, dry_run=dry_run, require_confirm=require_confirm)
         elif parsed_cmd.command == "list":
             for p in bop.list(fileset):
                 print(p)
@@ -99,13 +112,19 @@ def main_execute(
     elif isinstance(parsed_cmd, parsing.RenameCommand):
         fileset = FileSet(path_or_default(directory), special_files=special_files)
         bop.rename(
-            fileset, parsed_cmd.old, parsed_cmd.new, require_confirm=require_confirm
+            fileset,
+            parsed_cmd.old,
+            parsed_cmd.new,
+            dry_run=dry_run,
+            require_confirm=require_confirm,
         )
     else:
         raise BatchOpImpossibleError
 
 
-def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
+def main_interactive(
+    d: Optional[str], *, dry_run: bool = False, special_files: bool = False
+) -> None:
     import readline
 
     root = path_or_default(d)
@@ -144,6 +163,7 @@ def main_interactive(d: Optional[str], *, special_files: bool = False) -> None:
         if not s:
             continue
 
+        # TODO: other commands (and respect --dry-run)
         if s.lower() == "list":
             for p in fs.resolve():
                 print(p)
@@ -184,10 +204,12 @@ class BatchOp:
     def count(self, fileset: FileSet) -> int:
         return sum(1 for _ in fileset.resolve())
 
-    def delete(self, fileset: FileSet, *, require_confirm: bool = True) -> None:
+    def delete(
+        self, fileset: FileSet, *, dry_run: bool = False, require_confirm: bool = True
+    ) -> None:
         # TODO: avoid computing entire file-set twice?
         # TODO: use `du` command if available
-        size = fileset.calculate_size()
+        size = fileset.calculate_size(recurse=RecurseBehavior.INCLUDE_DIR_CHILDREN)
         nfiles = size.file_count
         ndirs = size.directory_count
         nbytes = size.size_in_bytes
@@ -202,15 +224,21 @@ class BatchOp:
             return
 
         # TODO: pass paths to `rm` in batches
-        for p in fileset.resolve(recurse=False):
+        for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
             # TODO: cross-platform
             if p.is_dir():
-                sh(["rm", "-rf", p])
+                sh(["rm", "-rf", p], dry_run=dry_run)
             else:
-                sh(["rm", p])
+                sh(["rm", p], dry_run=dry_run)
 
     def rename(
-        self, fileset: FileSet, old: str, new: str, *, require_confirm: bool = True
+        self,
+        fileset: FileSet,
+        old: str,
+        new: str,
+        *,
+        dry_run: bool = False,
+        require_confirm: bool = True,
     ) -> None:
         # TODO: detect name collisions
         pattern = re.compile(globreplace.glob_to_regex(old))
@@ -233,11 +261,15 @@ class BatchOp:
                 continue
 
             # TODO: cross-platform
-            sh(["mv", "-n", p, p.parent / new_name])
+            sh(["mv", "-n", p, p.parent / new_name], dry_run=dry_run)
 
 
-def sh(args: List[Union[str, Path]]) -> None:
-    subprocess.run(args, check=True)
+def sh(args: Sequence[Union[str, Path]], *, dry_run: bool = False) -> None:
+    if dry_run:
+        args = ["echo"] + list(args)
+
+    # don't capture output when --dry-run so that `echo` prints to the terminal
+    subprocess.run(args, capture_output=not dry_run, check=True)
 
 
 def confirm(prompt: str) -> bool:
