@@ -29,7 +29,10 @@ class FileSet:
         self.filters = filters
         self.special_files = special_files
 
-    def resolve(self) -> Generator[Path, None, None]:
+    def resolve(self, *, recurse: bool = True) -> Generator[Path, None, None]:
+        should_recurse_global = recurse
+        del recurse
+
         all_filters = []
         if not self.special_files:
             all_filters.append(filters.FilterIsSpecial().negate())
@@ -42,12 +45,18 @@ class FileSet:
             # TODO: terminate filter application early if possible
             results = [filters.expand_result(f.test(item)) for f in all_filters]
             should_include = all(include_self for include_self, _ in results)
-            should_recurse = all(include_children for _, include_children in results)
+            should_recurse_here = all(
+                include_children for _, include_children in results
+            )
 
             if should_include:
                 yield item
 
-            if should_recurse and item.is_dir():
+            if (
+                (should_recurse_global or not should_include)
+                and should_recurse_here
+                and item.is_dir()
+            ):
                 for child in item.iterdir():
                     stack.append(child)
 

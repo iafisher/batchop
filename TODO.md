@@ -15,6 +15,7 @@
     - tricky when you have multiple gitignores in the same repository
     - <https://github.com/mherrmann/gitignore_parser>
 - adjectives (`list all hidden files`)
+- pattern as a noun (`delete '*.md'`)
 - "directory" as synonym for "folder"
 - support glob patterns for `is in` filter
 - support regex patterns for `is in` filter
@@ -24,6 +25,8 @@
     - if one command-line arg, tokenize it
     - if more than one, treat it as already tokenized?
         - might need a "subtokenize" routine, e.g. to split "10mb" into "10", "mb"
+- `--verbose` flag
+- `X or Y` filter
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?

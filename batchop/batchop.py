@@ -201,13 +201,13 @@ class BatchOp:
             print("Aborted.")
             return
 
-        # TODO: don't remove files that are in a directory that will be removed
-        # TODO: don't use -rf except for directories
         # TODO: pass paths to `rm` in batches
-        for p in fileset.resolve():
-            # TODO: enable rm
+        for p in fileset.resolve(recurse=False):
             # TODO: cross-platform
-            sh(["echo", "rm", "-rf", p])
+            if p.is_dir():
+                sh(["rm", "-rf", p])
+            else:
+                sh(["rm", p])
 
     def rename(
         self, fileset: FileSet, old: str, new: str, *, require_confirm: bool = True
@@ -237,7 +237,7 @@ class BatchOp:
 
 
 def sh(args: List[Union[str, Path]]) -> None:
-    subprocess.run(args, capture_output=True, check=True)
+    subprocess.run(args, check=True)
 
 
 def confirm(prompt: str) -> bool:

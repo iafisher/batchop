@@ -249,6 +249,20 @@ class TestRenameCommand(BaseTmpDir):
         self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
 
 
+class TestDeleteCommand(BaseTmpDir):
+    def test_delete_empty_files(self):
+        main_execute(
+            "delete files that are empty",
+            directory=self.tmpdir.name,
+            require_confirm=False,
+        )
+
+        self.assert_file_not_exists("empty_file.txt")
+        # didn't delete other stuff
+        self.assert_file_exists("empty_dir")
+        self.assert_file_exists("constitution.txt")
+
+
 RESOURCES = Path(__file__).absolute().parent / "resources"
 FILE_TREE = {
     "constitution.txt": None,
