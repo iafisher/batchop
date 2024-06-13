@@ -32,6 +32,7 @@ Interactive interface:
 
 import argparse
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Union
@@ -56,7 +57,11 @@ def main() -> None:
 
 
 def main_execute(cmdstr: str, *, directory: Optional[str]) -> None:
-    parsed_cmd = parsing.parse_command(cmdstr)
+    try:
+        parsed_cmd = parsing.parse_command(cmdstr)
+    except BatchOpSyntaxError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     bop = BatchOp()
     fileset = FileSet(path_or_default(directory), parsed_cmd.filters)
