@@ -8,7 +8,7 @@ $ poetry run pytest
 
 Publish to PyPI:
 
-1. Update version number in `pyproject.toml`.
+1. Update version number in `pyproject.toml` and `batchop/__init__.py`.
 2. Run `poetry build`.
 3. Run `poetry publish`.
 4. Create a release on GitHub.

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Sequence, Union
 
-from . import english, filters, globreplace, parsing
+from . import english, filters, globreplace, parsing, __version__
 from .common import (
     BatchOpError,
     BatchOpImpossibleError,
@@ -29,7 +29,6 @@ from .filters import Filter
 
 
 def main() -> None:
-    # TODO: --version flag
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
     parser.add_argument(
@@ -48,6 +47,7 @@ def main() -> None:
         help="Include files that are neither regular files nor directories. This is rarely desirable.",
     )
     parser.add_argument("words", nargs="*")
+    parser.add_argument("--version", action="version", version=__version__)
     args = parser.parse_args()
 
     try:
