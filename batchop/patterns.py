@@ -214,4 +214,13 @@ PATTERNS = [
         ],
         filters.FilterHasExtension,
     ),
+    # 'with extension X'
+    (
+        [
+            Lit("with"),
+            AnyLit(["ext", "extension"]),
+            String(),
+        ],
+        filters.FilterHasExtension,
+    ),
 ]

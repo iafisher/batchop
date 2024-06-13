@@ -27,3 +27,8 @@
     - Option 2: directories passed through
     - Option 3: filter directories whose total size is greater than 10 megabytes
 - Should it ever be possible to mix files and folders in the same command?
+- Should `not in __pycache__` means "not in `__pycache__` in the root directory", or
+  "not in any directory named `__pycache__`"?
+    - For `__pycache__` the latter interpretation seems more intuitive, but if the directory is
+      some specific name like `batchop`, then the former.
+    - Idea: if contains a slash, always interpreted as a path; otherwise interpreted as a name

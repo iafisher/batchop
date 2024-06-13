@@ -180,6 +180,18 @@ class TestListCommand(unittest.TestCase):
         fs = self.fs.size_lt(1, "kb")
         self.assert_paths_equal(self.bop.list(fs), ["empty_file.txt"])
 
+    def test_list_by_extension(self):
+        fs = self.fs.with_ext("txt")
+        self.assert_paths_equal(
+            self.bop.list(fs),
+            [
+                "constitution.txt",
+                "empty_file.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
     def assert_paths_equal(self, actual, expected):
         expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]
         self.assertEqual(list(sorted(actual)), list(sorted(expected)))

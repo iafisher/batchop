@@ -125,6 +125,9 @@ class FileSet:
     def size_le(self, n: NumberLike, unit: str) -> "FileSet":
         return self.copy_with(filters.FilterSizeLessEqual(_n_times_unit(n, unit)))
 
+    def with_ext(self, ext: str) -> "FileSet":
+        return self.copy_with(filters.FilterHasExtension(ext))
+
     def _normalize_path(self, path_like: PathLike) -> Path:
         path = Path(path_like)
         if path.is_absolute():
