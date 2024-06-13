@@ -9,9 +9,10 @@ $ poetry run pytest
 Publish to PyPI:
 
 1. Update version number in `pyproject.toml` and `batchop/__init__.py`.
-2. Run `poetry build`.
-3. Run `poetry publish`.
-4. Create a release on GitHub.
+2. Make a commit and push it to GitHub.
+3. Run `poetry build`.
+4. Run `poetry publish`.
+5. Create a release on GitHub.
 
 ## Prior art
 - [mmv](https://manpages.ubuntu.com/manpages/noble/en/man1/mmv.1.html) inspired the syntax for

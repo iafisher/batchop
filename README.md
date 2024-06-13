@@ -4,6 +4,9 @@
 intuitive, human-readable syntax.
 
 ```shell
+# or use `pipx` to install it in an isolated environment
+$ pip install batchop
+
 $ alias bop=batchop
 $ bop list files with ext jpg
 05_27_beach.jpg
