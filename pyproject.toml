@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "batchop"
-version = "0.1.1"
+version = "0.1.2"
 description = "Batch file operations with an intuitive syntax and safe defaults"
 authors = ["Ian Fisher <ian@iafisher.com>"]
 readme = "README.md"
