@@ -15,12 +15,17 @@ class UnaryCommand:
 
 
 @dataclass
+class SpecialCommand:
+    command: str
+
+
+@dataclass
 class RenameCommand:
     old: str
     new: str
 
 
-ParsedCommand = Union[UnaryCommand, RenameCommand]
+ParsedCommand = Union[UnaryCommand, SpecialCommand, RenameCommand]
 
 
 def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
@@ -43,7 +48,7 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     elif command == "undo":
         # TODO: handle trailing input
         # TODO: should probably not reuse UnaryCommand for this
-        return UnaryCommand(command=command, filters=[])
+        return SpecialCommand(command=command)
     elif command == "rename":
         return parse_rename_command(tokens)
     else:

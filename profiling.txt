@@ -1,3 +1,16 @@
+Optimization: promote FilterIsInPath to FileSet.root
+Explanation:
+  If "is in X" filter is present, then we only need to search in X. It's a complete waste of time to recurse through
+  every other directory. So the optimizer can simply remove that filter and set path X to be the root of the fileset.
+Time: 2024-06-14 3:27 PM
+Command: batchop -d ~/Code/3p/linux count files in arch/arm64
+Result: 2587
+Before:
+  0.93s user 0.83s system 97% cpu 1.811 total
+After:
+  0.21s user 0.08s system 86% cpu 0.326 total
+Verdict: big improvement
+
 Optimization: use Path.iterdir() instead of Path.glob("*")
 Time: 2024-06-06 12:14 PM
 Command: python3 batchop.py -d ~/Code/research count files that are not hidden

@@ -93,6 +93,9 @@ class FileSet:
 
         return r
 
+    def optimize(self):
+        _promote_is_in_path_filter_to_root(self)
+
     def pop(self) -> None:
         self.filters.pop()
 
@@ -201,3 +204,19 @@ def _n_times_unit(n: NumberLike, unit: str) -> int:
         n = decimal.Decimal(n)
 
     return int(n * multiple)
+
+
+# Optimizations
+# -------------
+
+
+def _promote_is_in_path_filter_to_root(fs: FileSet) -> None:
+    i = None
+    for j, f in enumerate(fs.filters):
+        if isinstance(f, filters.FilterIsInPath):
+            fs.root = f.path
+            i = j
+            break
+
+    if i is not None:
+        fs.filters.pop(i)

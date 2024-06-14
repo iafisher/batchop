@@ -83,6 +83,7 @@ def main_execute(
     bop = BatchOp(context=context)
     if isinstance(parsed_cmd, parsing.UnaryCommand):
         fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
+        fileset.optimize()
         if parsed_cmd.command == "delete":
             bop.delete(
                 fileset,
@@ -101,7 +102,10 @@ def main_execute(
         elif parsed_cmd.command == "count":
             n = bop.count(fileset)
             print(n)
-        elif parsed_cmd.command == "undo":
+        else:
+            parsing.err_unknown_command(parsed_cmd.command)
+    elif isinstance(parsed_cmd, parsing.SpecialCommand):
+        if parsed_cmd.command == "undo":
             bop.undo(require_confirm=require_confirm)
         else:
             parsing.err_unknown_command(parsed_cmd.command)

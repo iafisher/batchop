@@ -43,6 +43,7 @@
     - if `is in` filter then set that to the root
 - handle non-UTF8 file names
 - respect `NO_COLOR`
+- transactional semantics – roll back operations that have already been completed?
 
 ## More filters
 - `X or Y` filter
@@ -50,8 +51,9 @@
 - filter on time modified (needs design)
 - filter on permissions: `is executable`
 
-## Cleanup
+## Cleanup/testing
 - just chdir to handle `-d` flag?
+- inject synthetic errors to test error handling in middle of operation
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?
