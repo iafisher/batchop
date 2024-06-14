@@ -1,5 +1,4 @@
 import abc
-import decimal
 import fnmatch
 import re
 from dataclasses import dataclass

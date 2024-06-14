@@ -1,7 +1,7 @@
 from typing import List
 
 from . import colors
-from .common import BatchOpError, bytes_to_unit, plural
+from .common import bytes_to_unit, plural
 from .db import Invocation, InvocationOp
 
 

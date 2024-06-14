@@ -1,4 +1,3 @@
-import decimal
 import os
 import re
 import tempfile
@@ -270,10 +269,13 @@ class TestListCommand(BaseTmpDir):
 
 class TestRenameCommand(BaseTmpDir):
     def test_rename_pride_and_prejudice(self):
+        context = uuid.uuid4().hex
+
         main_execute(
             "rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt",
             directory=self.tmpdir.name,
             require_confirm=False,
+            context=context,
         )
 
         self.assert_file_exists("pride-and-prejudice/ch1.txt")
@@ -281,6 +283,19 @@ class TestRenameCommand(BaseTmpDir):
 
         self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
         self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+
+        main_execute(
+            "undo",
+            directory=self.tmpdir.name,
+            require_confirm=False,
+            context=context,
+        )
+
+        self.assert_file_not_exists("pride-and-prejudice/ch1.txt")
+        self.assert_file_not_exists("pride-and-prejudice/ch2.txt")
+
+        self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
 
 
 class TestDeleteCommand(BaseTmpDir):

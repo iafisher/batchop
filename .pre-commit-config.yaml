@@ -45,3 +45,10 @@ repos:
         language: system
         pass_filenames: false
         args: [run, pytest]
+    -   id: python_format
+        name: python_format
+        description: 'Run unit tests'
+        entry: poetry
+        language: system
+        pass_filenames: false
+        args: [run, black, .]

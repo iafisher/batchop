@@ -1,4 +1,3 @@
-import dataclasses
 import decimal
 import enum
 import re

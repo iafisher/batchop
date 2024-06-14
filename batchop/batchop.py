@@ -2,12 +2,10 @@ import argparse
 import os
 import re
 import subprocess
-import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional, Sequence, Union
 
-from . import english, filters, globreplace, parsing, __version__
+from . import english, globreplace, parsing, __version__
 from .common import (
     BatchOpError,
     BatchOpImpossibleError,
@@ -23,9 +21,10 @@ from .db import (
     INVOCATION_CONTEXT_PYTHON,
     OP_TYPE_DELETE,
     OP_TYPE_RENAME,
+    InvocationId,
+    OpType,
 )
 from .fileset import FileSet, RecurseBehavior
-from .filters import Filter
 
 
 def main() -> None:
@@ -114,6 +113,7 @@ def main_execute(
             parsed_cmd.new,
             dry_run=dry_run,
             require_confirm=require_confirm,
+            original_cmdline=original_cmdline,
         )
     else:
         raise BatchOpImpossibleError
@@ -236,19 +236,15 @@ class BatchOp:
             print("Aborted.")
             return
 
-        invocation_id = self.db.create_invocation(original_cmdline, undoable=True)
-        i = 1
-
-        # TODO: pass paths to `rm` in batches
+        undo_mgr = UndoManager.start(
+            self.db, self.directory / self._BACKUP_DIR, original_cmdline
+        )
         for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
             if dry_run:
                 print("remove {p}")
             else:
-                new_path = (
-                    self.directory / self._BACKUP_DIR / f"{invocation_id}___{i:0>8}"
-                )
-                i += 1
-                self.db.create_invocation_op(invocation_id, OP_TYPE_DELETE, p, new_path)
+                new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
+                # TODO: any way to do this in batches?
                 # TODO: cross-platform
                 sh(["mv", p, new_path])
 
@@ -306,6 +302,7 @@ class BatchOp:
         *,
         dry_run: bool = False,
         require_confirm: bool = True,
+        original_cmdline: str = "",
     ) -> None:
         # TODO: detect name collisions
         pattern = re.compile(globreplace.glob_to_regex(old))
@@ -322,16 +319,21 @@ class BatchOp:
             print("Aborted.")
             return
 
+        undo_mgr = UndoManager.start(
+            self.db, self.directory / self._BACKUP_DIR, original_cmdline
+        )
         for p in fileset.resolve():
             new_name = pattern.sub(repl, p.name)
             if new_name == p.name:
                 continue
 
-            # TODO: cross-platform
             if dry_run:
                 print(f"rename {p} to {new_name}")
             else:
-                sh(["mv", "-n", p, p.parent / new_name])
+                new_path = p.parent / new_name
+                undo_mgr.add_op(OP_TYPE_RENAME, p, new_path)
+                # TODO: cross-platform
+                sh(["mv", "-n", p, new_path])
 
         if dry_run:
             self._dry_run_notice()
@@ -363,6 +365,43 @@ class BatchOp:
             return local_share / "batchop"
 
         return Path.home() / ".batchop"
+
+
+class UndoManager:
+    db: Database
+    backup_directory: Path
+    invocation_id: InvocationId
+    i: int
+
+    @classmethod
+    def start(cls, db: Database, backup_directory: Path, cmdline: str) -> "UndoManager":
+        invocation_id = db.create_invocation(cmdline, undoable=True)
+        return cls(db, backup_directory, invocation_id)
+
+    # call `start`, don't call `__init__` directly
+    def __init__(
+        self, db: Database, backup_directory: Path, invocation_id: InvocationId
+    ) -> None:
+        self.db = db
+        self.backup_directory = backup_directory
+        self.invocation_id = invocation_id
+        self.i = 1
+
+    def add_op(
+        self, op_type: OpType, path_before: Path, path_after: Optional[Path] = None
+    ) -> Path:
+        if path_after is None:
+            path_after = self._make_new_path()
+
+        self.db.create_invocation_op(
+            self.invocation_id, op_type, path_before, path_after
+        )
+        return path_after
+
+    def _make_new_path(self) -> Path:
+        r = self.backup_directory / f"{self.invocation_id}___{self.i:0>8}"
+        self.i += 1
+        return r
 
 
 def sh(args: Sequence[Union[str, Path]]) -> None:
