@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, NoReturn, Optional, Tuple, Union
 
-from . import filters
-from .common import BatchOpImpossibleError, BatchOpSyntaxError
+from . import exceptions, filters
 from .filters import Filter
 from .patterns import PATTERNS, BasePattern
 
@@ -41,7 +40,7 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
         tokens = words
 
     if len(tokens) == 0:
-        err_empty_input()
+        raise exceptions.SyntaxEmptyInput
 
     command = tokens.pop(0).lower()
 
@@ -60,13 +59,13 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     elif command == "move":
         return parse_move_command(tokens, cwd=cwd)
     else:
-        err_unknown_command(command)
+        raise exceptions.SyntaxUnknownCommand(command)
 
 
 def parse_rename_command(tokens: List[str]) -> RenameCommand:
     if len(tokens) != 3 and tokens[1].lower() != "to":
         # TODO: more helpful error message
-        raise BatchOpSyntaxError("could not parse `rename` command")
+        raise exceptions.Syntax("could not parse `rename` command")
 
     return RenameCommand(tokens[0], tokens[2])
 
@@ -74,17 +73,13 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
 def parse_move_command(tokens: List[str], *, cwd: Path) -> MoveCommand:
     filters = parse_np_and_preds(tokens, cwd=cwd, trailing_ok=True)
     if not tokens:
-        # TODO: more helpful error message
-        raise BatchOpSyntaxError("premature end of input")
+        raise exceptions.SyntaxEndOfInput
 
     if tokens[0] != "to":
-        raise BatchOpSyntaxError(
-            f"expected 'to' as next word in 'move' command, got {tokens[0]!r}"
-        )
+        raise exceptions.SyntaxExpectedToken(expected="to", actual=tokens[0])
 
-    if len(tokens) != 2:
-        # TODO: more helpful error message
-        raise BatchOpSyntaxError("trailing input in 'move' command")
+    if len(tokens) > 2:
+        raise exceptions.SyntaxExtraInput(tokens[3])
 
     return MoveCommand(filters=filters, destination=tokens[1])
 
@@ -129,15 +124,14 @@ def parse_preds(
             if trailing_ok:
                 break
 
-            # TODO: more helpful message
-            raise BatchOpSyntaxError(f"could not parse starting at {tokens[i]!r}")
+            raise exceptions.SyntaxNoMatchingPattern(tokens[i])
 
     return filters
 
 
 def parse_np(tokens: List[str], *, cwd: Path) -> List[Filter]:
     if len(tokens) == 0:
-        err_empty_input()
+        raise exceptions.SyntaxEmptyInput
 
     r = []
     i = 0
@@ -213,8 +207,8 @@ def try_phrase_match(
 
             if m.negated:
                 if negated:
-                    raise BatchOpImpossibleError(
-                        "multiple negations in the same pattern"
+                    raise exceptions.Impossible(
+                        "multiple negations in the same pattern is not allowed"
                     )
 
                 negated = True
@@ -271,15 +265,3 @@ def consume_quote(s: str, i: int, delimiter: str) -> Tuple[str, int]:
         i += 1
 
     return s[start:i], i + 1
-
-
-def err_unknown_word(word: str) -> NoReturn:
-    raise BatchOpSyntaxError(f"unknown word: {word!r}")
-
-
-def err_unknown_command(cmd: str) -> NoReturn:
-    raise BatchOpSyntaxError(f"unknown command: {cmd!r}")
-
-
-def err_empty_input() -> NoReturn:
-    raise BatchOpSyntaxError("empty input")

@@ -1,7 +1,7 @@
 from typing import List
 
-from . import colors
-from .common import bytes_to_unit, plural, BatchOpImpossibleError
+from . import colors, exceptions
+from .common import bytes_to_unit, plural
 from .db import Invocation, InvocationOp
 from .fileset import FileSetSize
 
@@ -10,9 +10,9 @@ def confirm_delete_n_files(size: FileSetSize) -> str:
     return _confirm_n_files_generic("Delete", size)
 
 
-def confirm_rename_n_files(nfiles: int) -> str:
+def confirm_rename_n_files(size: FileSetSize) -> str:
     # TODO: give more information
-    s1 = plural(nfiles, "file", color=True)
+    s1 = plural(size.file_count, "file", color=True)
     return f"Rename {s1}? "
 
 
@@ -38,7 +38,7 @@ def _confirm_n_files_generic(verb: str, size: FileSetSize) -> str:
         if size.directory_count > 0:
             return f"{verb} {s2} totaling {s3}? "
         else:
-            raise BatchOpImpossibleError
+            raise exceptions.Impossible
 
 
 def confirm_undo(invocation: Invocation, ops: List[InvocationOp]) -> str:

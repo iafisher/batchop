@@ -7,19 +7,6 @@ from typing import Any, NoReturn, Optional, Union
 from . import colors
 
 
-class BatchOpError(Exception):
-    pass
-
-
-class BatchOpSyntaxError(BatchOpError):
-    pass
-
-
-# not a subclass of BatchOpError as it should not be caught
-class BatchOpImpossibleError(Exception):
-    pass
-
-
 PathLike = Union[str, Path]
 NumberLike = Union[int, float, decimal.Decimal, str]
 PatternLike = Union[str, re.Pattern]

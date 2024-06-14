@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 from typing import Any, List, Optional
 
-from batchop import filters, globreplace, patterns
+from batchop import exceptions, filters, globreplace, patterns
 from batchop.batchop import BatchOp, main_execute
-from batchop.common import BatchOpError, bytes_to_unit
+from batchop.common import bytes_to_unit
 from batchop.fileset import FileSet
 from batchop.parsing import (
     MoveCommand,
@@ -348,7 +348,7 @@ class TestMoveCommand(BaseTmpDir):
         self.assert_file_not_exists("chapters/")
 
     def test_move_files_collision(self):
-        with self.assertRaisesRegexp(BatchOpError, ".*would conflict.*"):
+        with self.assertRaises(exceptions.PathCollision):
             main_execute(
                 "move 'empty*.txt' to whatever",
                 directory=self.tmpdir.name,

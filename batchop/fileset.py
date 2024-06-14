@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List
 
-from . import filters
-from .common import BatchOpError, NumberLike, PathLike, PatternLike, unit_to_multiple
+from . import exceptions, filters
+from .common import NumberLike, PathLike, PatternLike, unit_to_multiple
 from .filters import Filter
 
 
@@ -189,9 +189,7 @@ class FileSet:
         path = Path(path_like)
         if path.is_absolute():
             if not path.is_relative_to(self.root):
-                raise BatchOpError(
-                    f"filter path ({path}) cannot be outside of file-set root ({self.root})"
-                )
+                raise exceptions.PathOutsideOfRoot(path=path, root=self.root)
         else:
             path = self.root / path
 
@@ -201,7 +199,7 @@ class FileSet:
 def _n_times_unit(n: NumberLike, unit: str) -> int:
     multiple = unit_to_multiple(unit)
     if multiple is None:
-        raise BatchOpError(f"{unit!r} is not a recognized unit")
+        raise exceptions.UnknownSizeUnit(unit)
 
     if isinstance(n, str):
         n = decimal.Decimal(n)

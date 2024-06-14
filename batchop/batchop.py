@@ -5,15 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Sequence, Union
 
-from . import english, globreplace, parsing, __version__
-from .common import (
-    BatchOpError,
-    BatchOpImpossibleError,
-    BatchOpSyntaxError,
-    PathLike,
-    err_and_bail,
-    plural,
-)
+from . import english, exceptions, globreplace, parsing, __version__
+from .common import PathLike, err_and_bail, plural
 from .db import (
     Database,
     InvocationOp,
@@ -65,8 +58,8 @@ def main() -> None:
             main_interactive(
                 args.directory, dry_run=args.dry_run, special_files=args.special_files
             )
-    except BatchOpError as e:
-        err_and_bail(e)
+    except exceptions.Base as e:
+        err_and_bail(e.fancy())
 
 
 def main_execute(
@@ -108,12 +101,12 @@ def main_execute(
             n = bop.count(fileset)
             print(n)
         else:
-            parsing.err_unknown_command(parsed_cmd.command)
+            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
     elif isinstance(parsed_cmd, parsing.SpecialCommand):
         if parsed_cmd.command == "undo":
             bop.undo(require_confirm=require_confirm)
         else:
-            parsing.err_unknown_command(parsed_cmd.command)
+            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
     elif isinstance(parsed_cmd, parsing.RenameCommand):
         fileset = FileSet(root, special_files=special_files)
         fileset.optimize()
@@ -136,7 +129,7 @@ def main_execute(
             original_cmdline=original_cmdline,
         )
     else:
-        raise BatchOpImpossibleError
+        raise exceptions.Impossible
 
 
 def main_interactive(
@@ -170,7 +163,7 @@ def main_interactive(
         recalculate = False
         try:
             s = input("> ").strip()
-        except BatchOpSyntaxError as e:
+        except exceptions.Syntax as e:
             print(f"error: {e}")
             continue
         except EOFError:
@@ -244,7 +237,7 @@ class BatchOp:
         # TODO: use `du` command if available
         size = fileset.calculate_size(recurse=RecurseBehavior.INCLUDE_DIR_CHILDREN)
         if size.is_empty():
-            raise BatchOpError("nothing to delete")
+            raise exceptions.EmptyFileSet
 
         # TODO: option to list files
         prompt = english.confirm_delete_n_files(size)
@@ -271,15 +264,25 @@ class BatchOp:
         # TODO: confirmation
 
         invocation, invocation_ops = self.db.get_last_invocation()
+
         if invocation is None:
-            # TODO: better message
-            raise BatchOpError("no previous command found")
+            raise exceptions.Base("there is no previous command to undo")
+
+        if invocation.cmdline:
+            the_last_command = f"the last command ({invocation.cmdline!r})"
+        else:
+            the_last_command = "the last command"
+
         if not invocation.undoable:
-            # TODO: better message
-            raise BatchOpError("last command was not undo-able")
+            if invocation.cmdline:
+                raise exceptions.Base(f"{the_last_command} was not undo-able")
+            else:
+                raise exceptions.Base(f"the last command was not undo-able")
         if len(invocation_ops) == 0:
-            # TODO: better message
-            raise BatchOpError("nothing to undo")
+            # TODO: is this case ever possible?
+            raise exceptions.Base(
+                f"{the_last_command} did not do anything so there is nothing to undo"
+            )
 
         prompt = english.confirm_undo(invocation, invocation_ops)
         if require_confirm and not confirm(prompt):
@@ -305,7 +308,7 @@ class BatchOp:
             elif op.op_type == OP_TYPE_CREATE:
                 self._undo_create(op)
             else:
-                raise BatchOpImpossibleError
+                raise exceptions.Impossible
 
         self.db.delete_invocation(invocation.invocation_id)
 
@@ -350,12 +353,10 @@ class BatchOp:
         fileset = fileset.matches(pattern)
 
         size = fileset.calculate_size()
-        nfiles = size.file_count
-        if nfiles == 0:
-            # TODO: better message
-            raise BatchOpError("nothing to rename")
+        if size.is_empty():
+            raise exceptions.EmptyFileSet
 
-        if require_confirm and not confirm(english.confirm_rename_n_files(nfiles)):
+        if require_confirm and not confirm(english.confirm_rename_n_files(size)):
             print("Aborted.")
             return
 
@@ -389,8 +390,7 @@ class BatchOp:
     ) -> None:
         size = fileset.calculate_size()
         if size.is_empty():
-            # TODO: better message
-            raise BatchOpError("nothing to move")
+            raise exceptions.EmptyFileSet
 
         destination = Path(destination_like).absolute()
 
@@ -509,7 +509,7 @@ def _detect_duplicates(paths: List[Path]) -> None:
     for path in paths:
         other = already_seen.get(path.name)
         if other is not None:
-            raise BatchOpError(f"paths would conflict: {other} and {path}")
+            raise exceptions.PathCollision(path1=path, path2=other)
         already_seen[path.name] = path
 
 
