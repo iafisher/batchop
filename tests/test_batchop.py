@@ -9,6 +9,7 @@ from typing import Any, List, Optional
 
 from batchop import filters, globreplace, patterns
 from batchop.batchop import BatchOp, main_execute
+from batchop.common import bytes_to_unit
 from batchop.fileset import FileSet
 from batchop.parsing import (
     PhraseMatch,
@@ -133,6 +134,15 @@ class TestTokenize(unittest.TestCase):
 
     def test_size_and_unit(self):
         self.assertEqual(tokenize("10kb"), ["10kb"])
+
+
+class TestUtilities(unittest.TestCase):
+    def test_bytes_to_unit(self):
+        self.assertEqual(bytes_to_unit(235, color=False), None)
+        self.assertEqual(bytes_to_unit(1270, color=False), "1.3 KB")
+        self.assertEqual(bytes_to_unit(40278, color=False), "40.3 KB")
+        self.assertEqual(bytes_to_unit(50_040_278, color=False), "50.0 MB")
+        self.assertEqual(bytes_to_unit(238_150_040_278, color=False), "238.2 GB")
 
 
 class TestGlobReplace(unittest.TestCase):

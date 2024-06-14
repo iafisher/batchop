@@ -41,6 +41,28 @@ def unit_to_multiple(unit: str) -> Optional[int]:
         return None
 
 
+def bytes_to_unit(nbytes: int, *, color: bool = True) -> Optional[str]:
+    if nbytes < 1000:
+        return None
+
+    ndec = decimal.Decimal(nbytes)
+    if nbytes < 1_000_000:
+        n = ndec / 1_000
+        unit = "KB"
+    elif nbytes < 1_000_000_000:
+        n = ndec / 1_000_000
+        unit = "MB"
+    else:
+        n = ndec / 1_000_000_000
+        unit = "GB"
+
+    nr = round(n, 1)
+    if color:
+        return f"{colors.number(nr)} {unit}"
+    else:
+        return f"{nr} {unit}"
+
+
 def plural(n: int, s: str, ss: str = "", color: bool = False) -> str:
     if not ss:
         ss = s + "s"

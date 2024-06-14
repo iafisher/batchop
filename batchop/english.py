@@ -1,15 +1,18 @@
 from typing import List
 
 from . import colors
-from .common import BatchOpError, plural
+from .common import BatchOpError, bytes_to_unit, plural
 from .db import Invocation, InvocationOp
 
 
 def confirm_delete_n_files(nfiles: int, ndirs: int, nbytes: int) -> str:
     s1 = plural(nfiles, "file", color=True)
     s2 = plural(ndirs, "directory", "directories", color=True)
-    # TODO: human-readable size units
+
     s3 = plural(nbytes, "byte", color=True)
+    human_readable = bytes_to_unit(nbytes)
+    if human_readable is not None:
+        s3 = f"{s3} ({human_readable})"
 
     if nfiles > 0:
         if ndirs > 0:

@@ -6,6 +6,10 @@
 - ~~`rename` command (needs design)~~
 - ~~`trash` command~~
 - `undo` command
+    - ~~undo for delete~~
+    - undo for rename
+    - undo all
+    - does stacked undo work?
 - `move` command
     - `move <fileset> to <dest>`
 - `replace` command
