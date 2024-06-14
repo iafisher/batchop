@@ -25,7 +25,13 @@ class RenameCommand:
     new: str
 
 
-ParsedCommand = Union[UnaryCommand, SpecialCommand, RenameCommand]
+@dataclass
+class MoveCommand:
+    filters: List[Filter]
+    destination: str
+
+
+ParsedCommand = Union[UnaryCommand, SpecialCommand, MoveCommand, RenameCommand]
 
 
 def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
@@ -51,6 +57,8 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
         return SpecialCommand(command=command)
     elif command == "rename":
         return parse_rename_command(tokens)
+    elif command == "move":
+        return parse_move_command(tokens, cwd=cwd)
     else:
         err_unknown_command(command)
 
@@ -63,18 +71,38 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
     return RenameCommand(tokens[0], tokens[2])
 
 
+def parse_move_command(tokens: List[str], *, cwd: Path) -> MoveCommand:
+    filters = parse_np_and_preds(tokens, cwd=cwd, trailing_ok=True)
+    if not tokens:
+        # TODO: more helpful error message
+        raise BatchOpSyntaxError("premature end of input")
+
+    if tokens[0] != "to":
+        raise BatchOpSyntaxError(
+            f"expected 'to' as next word in 'move' command, got {tokens[0]!r}"
+        )
+
+    if len(tokens) != 2:
+        # TODO: more helpful error message
+        raise BatchOpSyntaxError("trailing input in 'move' command")
+
+    return MoveCommand(filters=filters, destination=tokens[1])
+
+
 def parse_np_and_preds(
-    tokens: List[str], *, cwd: Path, empty_ok: bool = False
+    tokens: List[str], *, cwd: Path, empty_ok: bool = False, trailing_ok: bool = False
 ) -> List[Filter]:
     if empty_ok and not tokens:
         return []
 
     filters = parse_np(tokens, cwd=cwd)
-    filters.extend(parse_preds(tokens, cwd=cwd))
+    filters.extend(parse_preds(tokens, cwd=cwd, trailing_ok=trailing_ok))
     return filters
 
 
-def parse_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
+def parse_preds(
+    tokens: List[str], *, cwd: Path, trailing_ok: bool = False
+) -> List[Filter]:
     filters = []
     i = 0
     while i < len(tokens):
@@ -98,6 +126,9 @@ def parse_preds(tokens: List[str], *, cwd: Path) -> List[Filter]:
                 break
 
         if not matched_one:
+            if trailing_ok:
+                break
+
             # TODO: more helpful message
             raise BatchOpSyntaxError(f"could not parse starting at {tokens[i]!r}")
 

@@ -14,7 +14,7 @@ $ bop list files with ext jpg
 05_28_hike.jpg
 ```
 
-`batchop` can **list**, **count**, **rename**, and **delete** files. It's a general-purpose
+`batchop` can **list**, **count**, **rename**, **move**, and **delete** files. It's a general-purpose
 replacement for `find`, `xargs`, hand-written `bash` loops, etc.
 
 ```shell

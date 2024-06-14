@@ -6,9 +6,8 @@ from pathlib import Path
 from typing import List, NewType, Optional, Tuple
 
 
-# this must be incremented when schema changes
 # TODO: automatically handle migration from old to new version
-DATABASE_VERSION = 1
+DATABASE_VERSION = 2
 
 
 InvocationId = NewType("InvocationId", str)
@@ -16,6 +15,8 @@ OpType = NewType("OpType", str)
 
 OP_TYPE_DELETE = OpType("delete")
 OP_TYPE_RENAME = OpType("rename")
+OP_TYPE_MOVE = OpType("move")
+OP_TYPE_CREATE = OpType("create")
 
 # maintain separate lists of invocations for different contexts
 INVOCATION_CONTEXT_CLI = "cli"
@@ -43,6 +44,11 @@ class InvocationOp:
     path_after: Path
 
 
+# How to undo
+#   move/delete/rename: move `path_after` back to `path_before` (in case of delete, `path_after` is in backup dir)
+#   copy/create: delete `path_after`
+
+
 _INVOCATION_OP_FIELDS = "invocation_id, op_type, path_before, path_after"
 
 
@@ -59,6 +65,7 @@ class Database:
         self.conn.execute("PRAGMA foreign_keys = 1")
 
     def create_tables(self) -> None:
+        # ATTENTION: If you change this schema, you MUST increment DATABASE_VERSION.
         self.conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS invocation(
@@ -71,7 +78,7 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS invocation_op(
               invocation_id TEXT NOT NULL,
-              op_type TEXT NOT NULL CHECK (op_type IN ('delete', 'rename')),
+              op_type TEXT NOT NULL CHECK (op_type IN ('delete', 'rename', 'move', 'copy', 'create', 'replace')),
               path_before TEXT NOT NULL,
               path_after TEXT NOT NULL,
 
@@ -96,7 +103,7 @@ class Database:
         self,
         invocation_id: InvocationId,
         op_type: OpType,
-        path_before: Path,
+        path_before: Optional[Path],
         path_after: Path,
     ) -> None:
         self.conn.execute(
@@ -104,7 +111,12 @@ class Database:
             INSERT INTO invocation_op({_INVOCATION_OP_FIELDS})
             VALUES (?, ?, ?, ?)
             """,
-            (invocation_id, op_type, str(path_before), str(path_after)),
+            (
+                invocation_id,
+                op_type,
+                str(path_before) if path_before is not None else "",
+                str(path_after),
+            ),
         )
 
     def get_last_invocation(self) -> Tuple[Optional[Invocation], List[InvocationOp]]:

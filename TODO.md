@@ -9,7 +9,11 @@
     - ~~undo for delete~~
     - ~~undo for rename~~
     - undo all
+    - undo list and undo <n>
+        - undo move, undo delete, etc.
+        - tricky because undoing old old commands may not work
     - does stacked undo work?
+    - detect changes in directory and require confirmation if so
 - `move` command
     - `move <fileset> to <dest>`
 - `replace` command
@@ -44,6 +48,8 @@
 - handle non-UTF8 file names
 - respect `NO_COLOR`
 - transactional semantics – roll back operations that have already been completed?
+- `.batchop/backup` should have a directory per invocation, and maybe use original file names unless there would be a
+  collision?
 
 ## More filters
 - `X or Y` filter
@@ -54,6 +60,8 @@
 ## Cleanup/testing
 - just chdir to handle `-d` flag?
 - inject synthetic errors to test error handling in middle of operation
+- get rid of `cwd` parameters in parser
+- put test resources directory on filesystem, copy before each test, and insert an empty directory in a known location
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?

@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Generator, List, Optional, Sequence, Union
+from typing import Dict, Generator, List, Optional, Sequence, Union
 
 from . import english, globreplace, parsing, __version__
 from .common import (
@@ -23,6 +23,8 @@ from .db import (
     OP_TYPE_RENAME,
     InvocationId,
     OpType,
+    OP_TYPE_MOVE,
+    OP_TYPE_CREATE,
 )
 from .fileset import FileSet, RecurseBehavior
 
@@ -76,7 +78,10 @@ def main_execute(
     special_files: bool = False,
     context: str = INVOCATION_CONTEXT_CLI,
 ) -> None:
-    root = path_or_default(directory).absolute()
+    if directory is not None:
+        os.chdir(directory)
+
+    root = Path(".").absolute()
     original_cmdline = words if isinstance(words, str) else " ".join(words)
     parsed_cmd = parsing.parse_command(words, cwd=root)
 
@@ -110,11 +115,22 @@ def main_execute(
         else:
             parsing.err_unknown_command(parsed_cmd.command)
     elif isinstance(parsed_cmd, parsing.RenameCommand):
-        fileset = FileSet(path_or_default(directory), special_files=special_files)
+        fileset = FileSet(root, special_files=special_files)
+        fileset.optimize()
         bop.rename(
             fileset,
             parsed_cmd.old,
             parsed_cmd.new,
+            dry_run=dry_run,
+            require_confirm=require_confirm,
+            original_cmdline=original_cmdline,
+        )
+    elif isinstance(parsed_cmd, parsing.MoveCommand):
+        fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
+        fileset.optimize()
+        bop.move(
+            fileset,
+            parsed_cmd.destination,
             dry_run=dry_run,
             require_confirm=require_confirm,
             original_cmdline=original_cmdline,
@@ -227,15 +243,11 @@ class BatchOp:
         # TODO: avoid computing entire file-set twice?
         # TODO: use `du` command if available
         size = fileset.calculate_size(recurse=RecurseBehavior.INCLUDE_DIR_CHILDREN)
-        nfiles = size.file_count
-        ndirs = size.directory_count
-        nbytes = size.size_in_bytes
-
-        if nfiles == 0 and ndirs == 0:
+        if size.is_empty():
             raise BatchOpError("nothing to delete")
 
         # TODO: option to list files
-        prompt = english.confirm_delete_n_files(nfiles, ndirs, nbytes)
+        prompt = english.confirm_delete_n_files(size)
         if require_confirm and not confirm(prompt):
             print("Aborted.")
             return
@@ -274,11 +286,24 @@ class BatchOp:
             print("Aborted.")
             return
 
+        # It is VERY important to sequence the undo ops correctly.
+        #
+        # Example:
+        #   create A
+        #   move B.txt to A
+        #
+        # If we undo create A before we undo the move, we deleted A/b.txt and now we can't restore it!
+        #
+        # In reality `_undo_create` will refuse to delete a non-empty directory. Still, the principle is important.
+        _sort_undo_ops(invocation_ops)
+
         for op in invocation_ops:
             if op.op_type == OP_TYPE_DELETE:
                 self._undo_delete(op)
-            elif op.op_type == OP_TYPE_RENAME:
-                self._undo_rename(op)
+            elif op.op_type == OP_TYPE_RENAME or op.op_type == OP_TYPE_MOVE:
+                self._undo_rename_or_move(op)
+            elif op.op_type == OP_TYPE_CREATE:
+                self._undo_create(op)
             else:
                 raise BatchOpImpossibleError
 
@@ -287,16 +312,26 @@ class BatchOp:
     def _undo_delete(self, op: InvocationOp) -> None:
         if op.path_after.exists():
             # TODO: check for collision?
+            # TODO: cross-platform
             sh(["mv", op.path_after, op.path_before])
 
         # TODO: what to do if path_after doesn't exist?
         # could be innocuous, e.g. previous 'undo' command failed midway but some paths were already
         # restored
 
-    def _undo_rename(self, op: InvocationOp) -> None:
+    def _undo_rename_or_move(self, op: InvocationOp) -> None:
         if op.path_after.exists():
             # TODO: check for collision?
+            # TODO: cross-platform
             sh(["mv", op.path_after, op.path_before])
+
+    def _undo_create(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            if op.path_after.is_dir():
+                op.path_after.rmdir()
+            else:
+                op.path_after.unlink()
+        # TODO: what to do if path_after doesn't exist?
 
     def rename(
         self,
@@ -317,7 +352,8 @@ class BatchOp:
         size = fileset.calculate_size()
         nfiles = size.file_count
         if nfiles == 0:
-            return
+            # TODO: better message
+            raise BatchOpError("nothing to rename")
 
         if require_confirm and not confirm(english.confirm_rename_n_files(nfiles)):
             print("Aborted.")
@@ -341,6 +377,53 @@ class BatchOp:
 
         if dry_run:
             self._dry_run_notice()
+
+    def move(
+        self,
+        fileset: FileSet,
+        destination_like: PathLike,
+        *,
+        dry_run: bool = False,
+        require_confirm: bool = True,
+        original_cmdline: str = "",
+    ) -> None:
+        size = fileset.calculate_size()
+        if size.is_empty():
+            # TODO: better message
+            raise BatchOpError("nothing to move")
+
+        destination = Path(destination_like).absolute()
+
+        if require_confirm and not confirm(english.confirm_move_n_files(size)):
+            print("Aborted.")
+            return
+
+        paths_to_move = list(
+            fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN)
+        )
+
+        _detect_duplicates(paths_to_move)
+
+        if dry_run:
+            for p in paths_to_move:
+                print(f"move {p} to {destination}")
+            self._dry_run_notice()
+        else:
+            undo_mgr = UndoManager.start(
+                self.db, self.directory / self._BACKUP_DIR, original_cmdline
+            )
+
+            # TODO: add to confirmation message if destination will be created
+            # TODO: register with undo manager
+            # it is important to do this AFTER calling `fileset.resolve()` as otherwise the destination directory could
+            # be picked up as a source
+            undo_mgr.add_op(OP_TYPE_CREATE, None, destination)
+            destination.mkdir(parents=False, exist_ok=True)
+
+            for p in paths_to_move:
+                undo_mgr.add_op(OP_TYPE_MOVE, p, destination / p.name)
+            # TODO: pass `paths_to_move` in batches if really long
+            sh(["mv"] + paths_to_move + [destination])
 
     def _dry_run_notice(self):
         print()
@@ -392,7 +475,10 @@ class UndoManager:
         self.i = 1
 
     def add_op(
-        self, op_type: OpType, path_before: Path, path_after: Optional[Path] = None
+        self,
+        op_type: OpType,
+        path_before: Optional[Path],
+        path_after: Optional[Path] = None,
     ) -> Path:
         if path_after is None:
             path_after = self._make_new_path()
@@ -406,6 +492,25 @@ class UndoManager:
         r = self.backup_directory / f"{self.invocation_id}___{self.i:0>8}"
         self.i += 1
         return r
+
+
+def _sort_undo_ops(ops: List[InvocationOp]) -> None:
+    def _key(op: InvocationOp) -> int:
+        if op.op_type == OP_TYPE_CREATE:
+            return 2
+        else:
+            return 1
+
+    ops.sort(key=_key)
+
+
+def _detect_duplicates(paths: List[Path]) -> None:
+    already_seen: Dict[str, Path] = {}
+    for path in paths:
+        other = already_seen.get(path.name)
+        if other is not None:
+            raise BatchOpError(f"paths would conflict: {other} and {path}")
+        already_seen[path.name] = path
 
 
 def sh(args: Sequence[Union[str, Path]]) -> None:

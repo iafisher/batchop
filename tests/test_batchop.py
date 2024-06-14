@@ -8,9 +8,10 @@ from typing import Any, List, Optional
 
 from batchop import filters, globreplace, patterns
 from batchop.batchop import BatchOp, main_execute
-from batchop.common import bytes_to_unit
+from batchop.common import BatchOpError, bytes_to_unit
 from batchop.fileset import FileSet
 from batchop.parsing import (
+    MoveCommand,
     PhraseMatch,
     RenameCommand,
     UnaryCommand,
@@ -50,6 +51,17 @@ class TestCommandParsing(unittest.TestCase):
 
         cmd = parse_command("rename '*.md' to '#1.md'", cwd=cwd)
         self.assertEqual(cmd, RenameCommand("*.md", "#1.md"))
+
+    def test_move_command(self):
+        cwd = Path(".")
+
+        cmd = parse_command("move '*-ch*.txt' to books/austen", cwd=cwd)
+        self.assertEqual(
+            cmd,
+            MoveCommand(
+                [filters.FilterIsLikeName("*-ch*.txt")], destination="books/austen"
+            ),
+        )
 
 
 class TestPatternMatching(unittest.TestCase):
@@ -187,6 +199,8 @@ class TestListCommand(BaseTmpDir):
                 "constitution.txt",
                 "empty_dir",
                 "empty_file.txt",
+                "misc",
+                "misc/empty_file.txt",
                 "pride-and-prejudice",
                 "pride-and-prejudice/pride-and-prejudice-ch1.txt",
                 "pride-and-prejudice/pride-and-prejudice-ch2.txt",
@@ -200,6 +214,7 @@ class TestListCommand(BaseTmpDir):
             [
                 "constitution.txt",
                 "empty_file.txt",
+                "misc/empty_file.txt",
                 "pride-and-prejudice/pride-and-prejudice-ch1.txt",
                 "pride-and-prejudice/pride-and-prejudice-ch2.txt",
             ],
@@ -207,11 +222,13 @@ class TestListCommand(BaseTmpDir):
 
     def test_list_directories(self):
         fs = self.fs.is_dir()
-        self.assert_paths_equal(self.bop.list(fs), ["empty_dir", "pride-and-prejudice"])
+        self.assert_paths_equal(
+            self.bop.list(fs), ["empty_dir", "misc", "pride-and-prejudice"]
+        )
 
     def test_list_non_empty_directories(self):
         fs = self.fs.is_dir().is_not_empty()
-        self.assert_paths_equal(self.bop.list(fs), ["pride-and-prejudice"])
+        self.assert_paths_equal(self.bop.list(fs), ["misc", "pride-and-prejudice"])
 
     def test_list_in_directory(self):
         fs = self.fs.is_in("pride-and-prejudice")
@@ -238,7 +255,9 @@ class TestListCommand(BaseTmpDir):
         self.assert_paths_equal(self.bop.list(fs), ["constitution.txt"])
 
         fs = self.fs.size_lt(1, "kb")
-        self.assert_paths_equal(self.bop.list(fs), ["empty_file.txt"])
+        self.assert_paths_equal(
+            self.bop.list(fs), ["empty_file.txt", "misc/empty_file.txt"]
+        )
 
     def test_list_by_extension(self):
         fs = self.fs.with_ext("txt")
@@ -247,6 +266,7 @@ class TestListCommand(BaseTmpDir):
             [
                 "constitution.txt",
                 "empty_file.txt",
+                "misc/empty_file.txt",
                 "pride-and-prejudice/pride-and-prejudice-ch1.txt",
                 "pride-and-prejudice/pride-and-prejudice-ch2.txt",
             ],
@@ -296,6 +316,46 @@ class TestRenameCommand(BaseTmpDir):
 
         self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
         self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+
+
+class TestMoveCommand(BaseTmpDir):
+    def test_move_files(self):
+        context = uuid.uuid4().hex
+
+        main_execute(
+            "move '*-ch*.txt' to chapters",
+            directory=self.tmpdir.name,
+            require_confirm=False,
+            context=context,
+        )
+
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_not_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+        self.assert_file_exists("chapters/pride-and-prejudice-ch1.txt")
+        self.assert_file_exists("chapters/pride-and-prejudice-ch2.txt")
+        # didn't move other stuff
+        self.assert_file_exists("empty_dir")
+        self.assert_file_exists("constitution.txt")
+
+        main_execute(
+            "undo", directory=self.tmpdir.name, require_confirm=False, context=context
+        )
+
+        self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
+        self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch2.txt")
+        self.assert_file_not_exists("chapters/pride-and-prejudice-ch1.txt")
+        self.assert_file_not_exists("chapters/pride-and-prejudice-ch2.txt")
+        self.assert_file_not_exists("chapters/")
+
+    def test_move_files_collision(self):
+        with self.assertRaisesRegexp(BatchOpError, ".*would conflict.*"):
+            main_execute(
+                "move 'empty*.txt' to whatever",
+                directory=self.tmpdir.name,
+                require_confirm=False,
+            )
+
+    # TODO: test for moving directories as well as files
 
 
 class TestDeleteCommand(BaseTmpDir):
@@ -359,6 +419,9 @@ FILE_TREE = {
     "constitution.txt": None,
     "empty_dir": {},
     "empty_file.txt": None,
+    "misc": {
+        "empty_file.txt": None,
+    },
     "pride-and-prejudice": {
         "pride-and-prejudice-ch1.txt": None,
         "pride-and-prejudice-ch2.txt": None,

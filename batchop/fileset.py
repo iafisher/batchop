@@ -16,11 +16,14 @@ class FileSetSize:
     directory_count: int
     size_in_bytes: int
 
+    def is_empty(self) -> bool:
+        return self.file_count == 0 and self.directory_count == 0
+
 
 class RecurseBehavior(enum.Enum):
     NORMAL = 1
     # once we hit a directory that is included, don't recurse into its children
-    # useful for deletion because `rm -rf` just needs to take a directory root
+    # useful for moving and deleting directories because `mv` and `rm` just need to take a directory root
     EXCLUDE_DIR_CHILDREN = 2
     # once we hit a directory that is included, include all its children regardless of filters
     # useful for previewing deletion because any children of directory will be deleted
