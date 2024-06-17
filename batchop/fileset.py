@@ -3,7 +3,7 @@ import enum
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, List
+from typing import Generator, List, Optional
 
 from . import exceptions, filters
 from .common import NumberLike, PathLike, PatternLike, unit_to_multiple
@@ -36,10 +36,14 @@ class FileSet:
     special_files: bool
 
     def __init__(
-        self, root: PathLike, filters: List[Filter] = [], *, special_files: bool = False
+        self,
+        root: PathLike,
+        filters_: Optional[List[Filter]] = None,
+        *,
+        special_files: bool = False
     ) -> None:
         self.root = Path(root).absolute()
-        self.filters = filters
+        self.filters = filters_ or []
         self.special_files = special_files
 
     def resolve(

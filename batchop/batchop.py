@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Sequence, Union
 
-from . import english, exceptions, globreplace, parsing, __version__
+from . import colors, english, exceptions, globreplace, parsing, __version__
 from .common import PathLike, err_and_bail, plural
 from .db import (
     Database,
@@ -196,13 +196,18 @@ def main_interactive(
                 print("  !pop                remove the last-applied filter")
             else:
                 print(
-                    f"error: unknown directive: {cmd!r} (enter !help to see available directives)"
+                    f"{colors.danger('error:')} unknown directive: {cmd!r} (enter !help to see available directives)"
                 )
 
             continue
 
-        tokens = parsing.tokenize(s)
-        filters = parsing.parse_preds(tokens, cwd=root)
+        try:
+            tokens = parsing.tokenize(s)
+            filters = parsing.parse_preds(tokens, cwd=root)
+        except exceptions.Base as e:
+            print(f"{colors.danger('error:')} {e.fancy()}")
+            continue
+
         fs.filters.extend(filters)
         recalculate = True
 
@@ -250,7 +255,7 @@ class BatchOp:
         )
         for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
             if dry_run:
-                print("remove {p}")
+                print(f"remove {p}")
             else:
                 new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
                 # TODO: any way to do this in batches?

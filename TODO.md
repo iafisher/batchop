@@ -1,6 +1,9 @@
 ## Bugs
 - ~~preview file/directory count for e.g. `delete .venv` doesn't work~~
-- don't exit interactive mode on parse error
+- ~~don't exit interactive mode on parse error~~
+- `delete X` is very slow in `~/Code` directory because it queries the entire directory instead of
+  just X
+- need to handle PermissionError gracefully -- how?
 
 ## Features
 - ~~`rename` command (needs design)~~
