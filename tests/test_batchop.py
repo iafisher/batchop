@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any, List, Optional
 
-from batchop import exceptions, filters, globreplace, patterns
+from batchop import exceptions, filters, globreplace, parsing, patterns
 from batchop.batchop import BatchOp, main_execute
 from batchop.common import bytes_to_unit
 from batchop.fileset import FileSet
@@ -198,6 +198,43 @@ class BaseTmpDir(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.tmpdirpath, path)))
 
 
+class TestFileSetViaScript(BaseTmpDir):
+    def test_via_script(self):
+        for stmt, expected_paths in self._read_blocks():
+            tokens = parsing.tokenize(stmt)
+            filters_ = parsing.parse_np_and_preds(tokens, cwd=Path(self.tmpdirpath))
+            print(filters_)
+            fs = FileSet(self.tmpdirpath, filters_)
+            actual_paths = [
+                p.relative_to(self.tmpdirpath) for p in sorted(fs.resolve())
+            ]
+            self.assertEqual(actual_paths, expected_paths)
+
+    def _read_blocks(self):
+        with open(TEST_SCRIPTS_PATH / "filters.txt", "r") as f:
+            current_statement = None
+            current_block = []
+            for i, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+
+                if line.startswith(">"):
+                    if current_statement is not None:
+                        yield current_statement, current_block
+
+                    current_statement = line[1:]
+                    current_block.clear()
+                else:
+                    if current_statement is None:
+                        raise Exception(f"expected line {i} to begin with '>'")
+
+                    current_block.append(Path(line))
+
+            if current_statement is not None:
+                yield current_statement, current_block
+
+
 class TestListCommand(BaseTmpDir):
     def test_list_all(self):
         self.assert_paths_equal(
@@ -214,83 +251,9 @@ class TestListCommand(BaseTmpDir):
             ],
         )
 
-    def test_list_files(self):
-        fs = self.fs.is_file()
-        self.assert_paths_equal(
-            self.bop.list(fs),
-            [
-                "constitution.txt",
-                "empty_file.txt",
-                "misc/empty_file.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
-            ],
-        )
-
-    def test_list_directories(self):
-        fs = self.fs.is_dir()
-        self.assert_paths_equal(
-            self.bop.list(fs), ["empty_dir", "misc", "pride-and-prejudice"]
-        )
-
-    def test_list_non_empty_directories(self):
-        fs = self.fs.is_dir().is_not_empty()
-        self.assert_paths_equal(self.bop.list(fs), ["misc", "pride-and-prejudice"])
-
-    def test_list_in_directory(self):
-        fs = self.fs.is_in("pride-and-prejudice")
-        self.assert_paths_equal(
-            self.bop.list(fs),
-            [
-                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
-            ],
-        )
-
-        # trailing slash shouldn't matter
-        fs = self.fs.is_in("pride-and-prejudice/")
-        self.assert_paths_equal(
-            self.bop.list(fs),
-            [
-                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
-            ],
-        )
-
-    def test_list_by_size(self):
-        fs = self.fs.size_gt(20, "kb")
-        self.assert_paths_equal(self.bop.list(fs), ["constitution.txt"])
-
-        fs = self.fs.size_lt(1, "kb")
-        self.assert_paths_equal(
-            self.bop.list(fs), ["empty_file.txt", "misc/empty_file.txt"]
-        )
-
-    def test_list_by_extension(self):
-        fs = self.fs.with_ext("txt")
-        self.assert_paths_equal(
-            self.bop.list(fs),
-            [
-                "constitution.txt",
-                "empty_file.txt",
-                "misc/empty_file.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
-            ],
-        )
-
-    def test_list_like(self):
-        fs = self.fs.is_like("p*ch?.txt")
-        self.assert_paths_equal(
-            self.bop.list(fs),
-            [
-                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
-                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
-            ],
-        )
-
     def assert_paths_equal(self, actual, expected):
-        expected = [Path(os.path.join(self.tmpdirpath, p)) for p in expected]
+        actual = [p.relative_to(self.tmpdirpath) for p in actual]
+        expected = [Path(s) for s in expected]
         self.assertEqual(list(sorted(actual)), list(sorted(expected)))
 
 
@@ -421,4 +384,6 @@ class TestDeleteCommand(BaseTmpDir):
         self.assert_file_exists("pride-and-prejudice")
 
 
-TEST_TREE_PATH = Path(__file__).absolute().parent / "test_tree"
+TEST_ROOT_PATH = Path(__file__).absolute().parent
+TEST_TREE_PATH = TEST_ROOT_PATH / "test_tree"
+TEST_SCRIPTS_PATH = TEST_ROOT_PATH / "scripts"

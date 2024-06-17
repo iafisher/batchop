@@ -1,0 +1,30 @@
+> folders
+empty_dir
+misc
+pride-and-prejudice
+
+> dirs that are not empty
+misc
+pride-and-prejudice
+
+> files in pride-and-prejudice
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+
+> files gt 20kb
+constitution.txt
+
+> files lt 1kb
+empty_file.txt
+misc/empty_file.txt
+
+> files with ext txt
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+
+> 'p*ch?.txt'
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
