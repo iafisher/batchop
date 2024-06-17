@@ -5,7 +5,15 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Sequence, Union
 
-from . import colors, english, exceptions, globreplace, parsing, __version__
+from . import (
+    colors,
+    confirmation,
+    english,
+    exceptions,
+    globreplace,
+    parsing,
+    __version__,
+)
 from .common import PathLike, err_and_bail, plural
 from .db import (
     Database,
@@ -244,9 +252,9 @@ class BatchOp:
         if size.is_empty():
             raise exceptions.EmptyFileSet
 
-        # TODO: option to list files
-        prompt = english.confirm_delete_n_files(size)
-        if require_confirm and not confirm(prompt):
+        if require_confirm and not confirmation.confirm_operation_on_fileset(
+            fileset, "Delete"
+        ):
             print("Aborted.")
             return
 
@@ -266,8 +274,6 @@ class BatchOp:
             self._dry_run_notice()
 
     def undo(self, *, require_confirm: bool = True) -> None:
-        # TODO: confirmation
-
         invocation, invocation_ops = self.db.get_last_invocation()
 
         if invocation is None:
@@ -357,11 +363,9 @@ class BatchOp:
 
         fileset = fileset.matches(pattern)
 
-        size = fileset.calculate_size()
-        if size.is_empty():
-            raise exceptions.EmptyFileSet
-
-        if require_confirm and not confirm(english.confirm_rename_n_files(size)):
+        if require_confirm and not confirmation.confirm_operation_on_fileset(
+            fileset, "Rename"
+        ):
             print("Aborted.")
             return
 
@@ -393,13 +397,11 @@ class BatchOp:
         require_confirm: bool = True,
         original_cmdline: str = "",
     ) -> None:
-        size = fileset.calculate_size()
-        if size.is_empty():
-            raise exceptions.EmptyFileSet
-
         destination = Path(destination_like).absolute()
 
-        if require_confirm and not confirm(english.confirm_move_n_files(size)):
+        if require_confirm and not confirmation.confirm_operation_on_fileset(
+            fileset, "Move"
+        ):
             print("Aborted.")
             return
 

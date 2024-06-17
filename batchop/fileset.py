@@ -96,6 +96,7 @@ class FileSet:
             else:
                 # TODO: special files?
                 r.file_count += 1
+                # TODO: handle stat() exception
                 r.size_in_bytes += p.stat().st_size
 
         return r

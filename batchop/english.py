@@ -7,7 +7,7 @@ from .fileset import FileSetSize
 
 
 def confirm_delete_n_files(size: FileSetSize) -> str:
-    return _confirm_n_files_generic("Delete", size)
+    return confirm_n_files_generic("Delete", size)
 
 
 def confirm_rename_n_files(size: FileSetSize) -> str:
@@ -17,10 +17,10 @@ def confirm_rename_n_files(size: FileSetSize) -> str:
 
 
 def confirm_move_n_files(size: FileSetSize) -> str:
-    return _confirm_n_files_generic("Move", size)
+    return confirm_n_files_generic("Move", size)
 
 
-def _confirm_n_files_generic(verb: str, size: FileSetSize) -> str:
+def confirm_n_files_generic(verb: str, size: FileSetSize) -> str:
     s1 = plural(size.file_count, "file", color=True)
     s2 = plural(size.directory_count, "directory", "directories", color=True)
 
