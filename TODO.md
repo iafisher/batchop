@@ -64,7 +64,7 @@
 - ~~just chdir to handle `-d` flag?~~
 - inject synthetic errors to test error handling in middle of operation
 - get rid of `cwd` parameters in parser
-- put test resources directory on filesystem, copy before each test, and insert an empty directory in a known location
+- ~~put test resources directory on filesystem, copy before each test, and insert an empty directory in a known location~~
 
 ## Questions
 - Should `list '*.md'` match all Markdown files or only the ones at the top level?

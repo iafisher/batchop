@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import tempfile
 import unittest
 import uuid
@@ -177,18 +178,24 @@ class TestGlobReplace(unittest.TestCase):
 class BaseTmpDir(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
-        create_file_tree(self.tmpdir.name)
+        self.tmpdirpath = os.path.join(self.tmpdir.name, "test_tree")
+
+        shutil.copytree(TEST_TREE_PATH, self.tmpdirpath)
+        # create an empty directory; this has to be done dynamically because git won't track an empty directory so it
+        # can't exist in the test_tree/ directory
+        os.mkdir(os.path.join(self.tmpdirpath, "empty_dir"))
+
         self.bop = BatchOp()
-        self.fs = FileSet(self.tmpdir.name)
+        self.fs = FileSet(self.tmpdirpath)
 
     def tearDown(self):
         self.tmpdir.cleanup()
 
     def assert_file_exists(self, path):
-        self.assertTrue(os.path.exists(os.path.join(self.tmpdir.name, path)))
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdirpath, path)))
 
     def assert_file_not_exists(self, path):
-        self.assertFalse(os.path.exists(os.path.join(self.tmpdir.name, path)))
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdirpath, path)))
 
 
 class TestListCommand(BaseTmpDir):
@@ -283,7 +290,7 @@ class TestListCommand(BaseTmpDir):
         )
 
     def assert_paths_equal(self, actual, expected):
-        expected = [Path(os.path.join(self.tmpdir.name, p)) for p in expected]
+        expected = [Path(os.path.join(self.tmpdirpath, p)) for p in expected]
         self.assertEqual(list(sorted(actual)), list(sorted(expected)))
 
 
@@ -293,7 +300,7 @@ class TestRenameCommand(BaseTmpDir):
 
         main_execute(
             "rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
             context=context,
         )
@@ -306,7 +313,7 @@ class TestRenameCommand(BaseTmpDir):
 
         main_execute(
             "undo",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
             context=context,
         )
@@ -324,7 +331,7 @@ class TestMoveCommand(BaseTmpDir):
 
         main_execute(
             "move '*-ch*.txt' to chapters",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
             context=context,
         )
@@ -338,7 +345,7 @@ class TestMoveCommand(BaseTmpDir):
         self.assert_file_exists("constitution.txt")
 
         main_execute(
-            "undo", directory=self.tmpdir.name, require_confirm=False, context=context
+            "undo", directory=self.tmpdirpath, require_confirm=False, context=context
         )
 
         self.assert_file_exists("pride-and-prejudice/pride-and-prejudice-ch1.txt")
@@ -351,7 +358,7 @@ class TestMoveCommand(BaseTmpDir):
         with self.assertRaises(exceptions.PathCollision):
             main_execute(
                 "move 'empty*.txt' to whatever",
-                directory=self.tmpdir.name,
+                directory=self.tmpdirpath,
                 require_confirm=False,
             )
 
@@ -362,7 +369,7 @@ class TestDeleteCommand(BaseTmpDir):
     def test_delete_empty_files(self):
         main_execute(
             "delete empty files",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
         )
 
@@ -374,7 +381,7 @@ class TestDeleteCommand(BaseTmpDir):
     def test_delete_folder_by_name(self):
         main_execute(
             "delete pride-and-prejudice",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
         )
 
@@ -387,7 +394,7 @@ class TestDeleteCommand(BaseTmpDir):
 
         main_execute(
             "delete '*.txt'",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
             context=context,
         )
@@ -401,7 +408,7 @@ class TestDeleteCommand(BaseTmpDir):
 
         main_execute(
             "undo",
-            directory=self.tmpdir.name,
+            directory=self.tmpdirpath,
             require_confirm=False,
             context=context,
         )
@@ -414,32 +421,4 @@ class TestDeleteCommand(BaseTmpDir):
         self.assert_file_exists("pride-and-prejudice")
 
 
-RESOURCES = Path(__file__).absolute().parent / "resources"
-FILE_TREE = {
-    "constitution.txt": None,
-    "empty_dir": {},
-    "empty_file.txt": None,
-    "misc": {
-        "empty_file.txt": None,
-    },
-    "pride-and-prejudice": {
-        "pride-and-prejudice-ch1.txt": None,
-        "pride-and-prejudice-ch2.txt": None,
-    },
-}
-
-
-def create_file_tree(root):
-    create_file_tree_from_template(root, FILE_TREE)
-
-
-def create_file_tree_from_template(root, t):
-    for name, subtree_maybe in t.items():
-        path = os.path.join(root, name)
-        if subtree_maybe is not None:
-            os.mkdir(path)
-            create_file_tree_from_template(path, subtree_maybe)
-        else:
-            contents = (RESOURCES / name).read_text()
-            with open(path, "w") as f:
-                f.write(contents)
+TEST_TREE_PATH = Path(__file__).absolute().parent / "test_tree"
