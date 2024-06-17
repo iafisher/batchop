@@ -1,0 +1,30 @@
+> list empty files
+empty_file.txt
+misc/empty_file.txt
+> delete empty files
+> list empty files
+> undo
+> list empty files
+empty_file.txt
+misc/empty_file.txt
+
+> list dirs
+empty_dir
+misc
+pride-and-prejudice
+> list '*ch*.txt'
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+> delete pride-and-prejudice
+> list dirs
+empty_dir
+misc
+> list '*ch*.txt'
+> undo
+> list dirs
+empty_dir
+misc
+pride-and-prejudice
+> list '*ch*.txt'
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt

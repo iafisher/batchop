@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Dict, Generator, List, Optional, Sequence, Union
+from typing import Dict, Generator, Iterable, List, Optional, Sequence, Union
 
 from . import (
     colors,
@@ -78,6 +78,7 @@ def main_execute(
     dry_run: bool = False,
     special_files: bool = False,
     context: str = INVOCATION_CONTEXT_CLI,
+    sort_output: bool = False,
 ) -> None:
     if directory is not None:
         os.chdir(directory)
@@ -98,13 +99,12 @@ def main_execute(
                 original_cmdline=original_cmdline,
             )
         elif parsed_cmd.command == "list":
-            cwd = Path(".").absolute()
-            if fileset.root == cwd:
-                for p in bop.list(fileset):
-                    print(p.relative_to(cwd))
-            else:
-                for p in bop.list(fileset):
-                    print(p)
+            it: Iterable[Path] = bop.list(fileset)
+            if sort_output:
+                it = sorted(it)
+
+            for p in it:
+                print(p.relative_to(root))
         elif parsed_cmd.command == "count":
             n = bop.count(fileset)
             print(n)

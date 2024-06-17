@@ -1,0 +1,26 @@
+> list '*.txt'
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+> move '*-ch*.txt' to chapters
+> list '*.txt'
+chapters/pride-and-prejudice-ch1.txt
+chapters/pride-and-prejudice-ch2.txt
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+> undo
+> list '*.txt'
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+
+# chapters/ deleted
+> list dirs
+empty_dir
+misc
+pride-and-prejudice
