@@ -2,7 +2,7 @@
 
 Run tests:
 
-```python
+```shell
 $ poetry run pytest
 ```
 
@@ -13,10 +13,3 @@ Publish to PyPI:
 3. Run `poetry build`.
 4. Run `poetry publish`.
 5. Create a release on GitHub.
-
-## Prior art
-- [mmv](https://manpages.ubuntu.com/manpages/noble/en/man1/mmv.1.html) inspired the syntax for
-  renaming.
-- [rename](http://plasmasturm.org/code/rename/) is another utility for renaming files with patterns.
-- [zfind](https://github.com/laktak/zfind) and [fselect](https://github.com/jhspetersson/fselect)
-  similarly use a human-readable syntax to find files.

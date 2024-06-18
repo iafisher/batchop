@@ -31,3 +31,11 @@ Oh, and you can **undo** commands, too:
 $ bop undo
 # out-takes are back!
 ```
+
+## Prior art
+
+- [mmv](https://manpages.ubuntu.com/manpages/noble/en/man1/mmv.1.html) inspired the syntax for
+  renaming.
+- [rename](http://plasmasturm.org/code/rename/) is another utility for renaming files with patterns.
+- [zfind](https://github.com/laktak/zfind) and [fselect](https://github.com/jhspetersson/fselect)
+  similarly use a human-readable syntax to find files.
