@@ -2,6 +2,7 @@ import abc
 import decimal
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, Optional
 
 from . import filters
@@ -116,6 +117,15 @@ class String(BasePattern):
             return None
 
 
+@dataclass
+class PathString(BasePattern):
+    def test(self, token: str) -> Optional[WordMatch]:
+        if token != "":
+            return WordMatch(captured=Path(token))
+        else:
+            return None
+
+
 _size_unit_pattern = re.compile(
     r"^([0-9]+(?:\.[0-9]+)?)(b|byte|bytes|kb|kilobyte|kilobytes|mb|megabyte|megabytes|gb|gigabyte|gigabytes)$"
 )
@@ -144,7 +154,6 @@ class SizeUnit(BasePattern):
 class Description:
     patterns: List[BasePattern]
     filter_constructor: Any
-    pass_cwd: bool = False
 
 
 PATTERNS = [
@@ -206,11 +215,10 @@ PATTERNS = [
             Opt(AnyLit(["is", "are"])),
             Not(),
             Lit("in"),
-            String(),
+            PathString(),
         ],
         # TODO: support glob and regex
         filters.FilterIsInPath,
-        pass_cwd=True,
     ),
     # 'that is hidden'
     Description(
@@ -238,8 +246,7 @@ PATTERNS = [
     ),
     # 'exclude X'
     Description(
-        [AnyLit(["exclude", "excluding"]), String()],
+        [AnyLit(["exclude", "excluding"]), PathString()],
         filters.FilterExclude,
-        pass_cwd=True,
     ),
 ]

@@ -23,19 +23,19 @@ class TestCommandParsing(unittest.TestCase):
     def test_delete_command(self):
         cwd = Path(".")
 
-        cmd = parse_command("delete everything", cwd=cwd)
+        cmd = parse_command("delete everything")
         self.assertEqual(cmd, UnaryCommand("delete", []))
 
-        cmd = parse_command("delete anything that is a file", cwd=cwd)
+        cmd = parse_command("delete anything that is a file")
         self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsFile()]))
 
-        cmd = parse_command("delete folders", cwd=cwd)
+        cmd = parse_command("delete folders")
         self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsDirectory()]))
 
     def test_list_command(self):
         cwd = Path(".")
 
-        cmd = parse_command("list all empty files", cwd=cwd)
+        cmd = parse_command("list all empty files")
         self.assertEqual(
             cmd,
             UnaryCommand(
@@ -47,13 +47,13 @@ class TestCommandParsing(unittest.TestCase):
     def test_rename_command(self):
         cwd = Path(".")
 
-        cmd = parse_command("rename '*.md' to '#1.md'", cwd=cwd)
+        cmd = parse_command("rename '*.md' to '#1.md'")
         self.assertEqual(cmd, RenameCommand("*.md", "#1.md"))
 
     def test_move_command(self):
         cwd = Path(".")
 
-        cmd = parse_command("move '*-ch*.txt' to books/austen", cwd=cwd)
+        cmd = parse_command("move '*-ch*.txt' to books/austen")
         self.assertEqual(
             cmd,
             MoveCommand(

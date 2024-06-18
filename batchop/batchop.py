@@ -85,7 +85,7 @@ def main_execute(
 
     root = Path(".").absolute()
     original_cmdline = words if isinstance(words, str) else " ".join(words)
-    parsed_cmd = parsing.parse_command(words, cwd=root)
+    parsed_cmd = parsing.parse_command(words)
 
     bop = BatchOp(context=context)
     if isinstance(parsed_cmd, parsing.UnaryCommand):
@@ -211,7 +211,7 @@ def main_interactive(
 
         try:
             tokens = parsing.tokenize(s)
-            filters = parsing.parse_preds(tokens, cwd=root)
+            filters = parsing.parse_preds(tokens)
         except exceptions.Base as e:
             print(f"{colors.danger('error:')} {e.fancy()}")
             continue

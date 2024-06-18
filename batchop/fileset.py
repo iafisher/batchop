@@ -54,6 +54,9 @@ class FileSet:
             all_filters.append(filters.FilterIsSpecial().negate())
         all_filters.extend(self.filters)
 
+        for f in all_filters:
+            f.make_absolute(self.root)
+
         # TODO: does this give a reasonable iteration order?
         stack = list(self.root.iterdir())
         while stack:
@@ -151,7 +154,7 @@ class FileSet:
 
     def is_in(self, path_like: PathLike) -> "FileSet":
         path = self._normalize_path(path_like)
-        return self.copy_with(filters.FilterIsInPath(path, cwd=self.root))
+        return self.copy_with(filters.FilterIsInPath(path))
 
     def is_in_glob(self, pattern: str) -> "FileSet":
         raise NotImplementedError
@@ -161,7 +164,7 @@ class FileSet:
 
     def is_not_in(self, path_like: PathLike) -> "FileSet":
         path = self._normalize_path(path_like)
-        return self.copy_with(filters.FilterIsNotInPath(path, cwd=self.root))
+        return self.copy_with(filters.FilterIsNotInPath(path))
 
     def is_not_in_glob(self, pattern: str) -> "FileSet":
         raise NotImplementedError
@@ -220,6 +223,7 @@ def _promote_is_in_path_filter_to_root(fs: FileSet) -> None:
     i = None
     for j, f in enumerate(fs.filters):
         if isinstance(f, filters.FilterIsInPath):
+            f.make_absolute(fs.root)
             fs.root = f.path
             i = j
             break

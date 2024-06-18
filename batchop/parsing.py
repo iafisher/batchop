@@ -33,7 +33,7 @@ class MoveCommand:
 ParsedCommand = Union[UnaryCommand, SpecialCommand, MoveCommand, RenameCommand]
 
 
-def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
+def parse_command(words: Union[str, List[str]]) -> ParsedCommand:
     if isinstance(words, str):
         tokens = tokenize(words)
     else:
@@ -45,11 +45,11 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     command = tokens.pop(0).lower()
 
     if command in ("count", "list"):
-        filters = parse_np_and_preds(tokens, cwd=cwd, empty_ok=True)
-        return UnaryCommand(command=command, filters=filters)
+        filters_ = parse_np_and_preds(tokens, empty_ok=True)
+        return UnaryCommand(command=command, filters=filters_)
     elif command == "delete":
-        filters = parse_np_and_preds(tokens, cwd=cwd, empty_ok=False)
-        return UnaryCommand(command=command, filters=filters)
+        filters_ = parse_np_and_preds(tokens, empty_ok=False)
+        return UnaryCommand(command=command, filters=filters_)
     elif command == "undo":
         # TODO: handle trailing input
         # TODO: should probably not reuse UnaryCommand for this
@@ -57,7 +57,7 @@ def parse_command(words: Union[str, List[str]], *, cwd: Path) -> ParsedCommand:
     elif command == "rename":
         return parse_rename_command(tokens)
     elif command == "move":
-        return parse_move_command(tokens, cwd=cwd)
+        return parse_move_command(tokens)
     else:
         raise exceptions.SyntaxUnknownCommand(command)
 
@@ -70,8 +70,8 @@ def parse_rename_command(tokens: List[str]) -> RenameCommand:
     return RenameCommand(tokens[0], tokens[2])
 
 
-def parse_move_command(tokens: List[str], *, cwd: Path) -> MoveCommand:
-    filters = parse_np_and_preds(tokens, cwd=cwd, trailing_ok=True)
+def parse_move_command(tokens: List[str]) -> MoveCommand:
+    filters_ = parse_np_and_preds(tokens, trailing_ok=True)
     if not tokens:
         raise exceptions.SyntaxEndOfInput
 
@@ -81,23 +81,21 @@ def parse_move_command(tokens: List[str], *, cwd: Path) -> MoveCommand:
     if len(tokens) > 2:
         raise exceptions.SyntaxExtraInput(tokens[3])
 
-    return MoveCommand(filters=filters, destination=tokens[1])
+    return MoveCommand(filters=filters_, destination=tokens[1])
 
 
 def parse_np_and_preds(
-    tokens: List[str], *, cwd: Path, empty_ok: bool = False, trailing_ok: bool = False
+    tokens: List[str], *, empty_ok: bool = False, trailing_ok: bool = False
 ) -> List[Filter]:
     if empty_ok and not tokens:
         return []
 
-    filters = parse_np(tokens, cwd=cwd)
-    filters.extend(parse_preds(tokens, cwd=cwd, trailing_ok=trailing_ok))
+    filters = parse_np(tokens)
+    filters.extend(parse_preds(tokens, trailing_ok=trailing_ok))
     return filters
 
 
-def parse_preds(
-    tokens: List[str], *, cwd: Path, trailing_ok: bool = False
-) -> List[Filter]:
+def parse_preds(tokens: List[str], *, trailing_ok: bool = False) -> List[Filter]:
     filters = []
     i = 0
     while i < len(tokens):
@@ -107,10 +105,7 @@ def parse_preds(
             if m is not None:
                 i += m.tokens_consumed
                 if description.filter_constructor is not None:
-                    if description.pass_cwd:
-                        f = description.filter_constructor(*m.captures, cwd=cwd)
-                    else:
-                        f = description.filter_constructor(*m.captures)
+                    f = description.filter_constructor(*m.captures)
 
                     if m.negated:
                         f = f.negate()
@@ -129,7 +124,7 @@ def parse_preds(
     return filters
 
 
-def parse_np(tokens: List[str], *, cwd: Path) -> List[Filter]:
+def parse_np(tokens: List[str]) -> List[Filter]:
     if len(tokens) == 0:
         raise exceptions.SyntaxEmptyInput
 
@@ -156,7 +151,7 @@ def parse_np(tokens: List[str], *, cwd: Path) -> List[Filter]:
         r.append(filters.FilterIsDirectory())
     else:
         # TODO: should probably check this token isn't some special word
-        r.append(filters.pattern_to_filter(tkn, cwd=cwd))
+        r.append(filters.pattern_to_filter(tkn))
 
     # remove the tokens we consumed
     i += 1

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Union
 
-from .common import PathLike
+from . import exceptions
 
 
 # if tuple, interpreted as (include_self, include_children)
@@ -20,8 +20,15 @@ def expand_result(r: Result) -> Tuple[bool, bool]:
 
 
 class Filter(abc.ABC):
+    # all subclasses must override this method
     @abc.abstractmethod
     def test(self, p: Path) -> Result:
+        pass
+
+    # only subclasses that internally store a path need to override this method
+    # typical implementation:
+    #   self.path = _make_absolute(self.path, root)
+    def make_absolute(self, root: Path) -> None:
         pass
 
     def negate(self) -> "Filter":
@@ -102,6 +109,9 @@ class FilterIs(Filter):
     def test(self, p: Path) -> Result:
         return self.path == p
 
+    def make_absolute(self, root: Path) -> None:
+        self.path = _make_absolute(self.path, root)
+
     def __str__(self) -> str:
         return f"is {self.path}"
 
@@ -145,20 +155,14 @@ class FilterMatches(Filter):
 class FilterIsInPath(Filter):
     path: Path
 
-    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
-        # TODO: should take Path, not PathLike
-        path = Path(path_like)
-        if not path.is_absolute():
-            self.path = cwd / path
-        else:
-            self.path = path
-
     def test(self, p: Path) -> Result:
         return test_is_in_exact(self.path, p)
 
+    def make_absolute(self, root: Path) -> None:
+        self.path = _make_absolute(self.path, root)
+
     def negate(self) -> Filter:
-        # TODO: `cwd` should be ignored since `self.path` will be absolute, but this is still messy
-        return FilterIsNotInPath(self.path, cwd=Path("."))
+        return FilterIsNotInPath(self.path)
 
     def __str__(self) -> str:
         return f"is in {self.path!r}"
@@ -168,14 +172,6 @@ class FilterIsInPath(Filter):
 class FilterIsNotInPath(Filter):
     path: Path
 
-    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
-        # TODO: should take Path, not PathLike
-        path = Path(path_like)
-        if not path.is_absolute():
-            self.path = cwd / path
-        else:
-            self.path = path
-
     def test(self, p: Path) -> Result:
         if test_is_in_exact(self.path, p):
             return (True, False)
@@ -183,6 +179,9 @@ class FilterIsNotInPath(Filter):
             # assumption: if a parent directory was excluded we never got here in the first place
             # b/c we returned include_children=False above
             return True
+
+    def make_absolute(self, root: Path) -> None:
+        self.path = _make_absolute(self.path, root)
 
     def __str__(self) -> str:
         return f"is not in {self.path!r}"
@@ -285,14 +284,6 @@ class FilterHasExtension(Filter):
 class FilterExclude(Filter):
     path: Path
 
-    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
-        # TODO: should take Path, not PathLike
-        path = Path(path_like)
-        if not path.is_absolute():
-            self.path = cwd / path
-        else:
-            self.path = path
-
     def test(self, p: Path) -> Result:
         if self.path == p:
             return (False, False)
@@ -300,6 +291,9 @@ class FilterExclude(Filter):
             # assumption: if a parent directory was excluded we never got here in the first place
             # b/c we returned include_children=False above
             return True
+
+    def make_absolute(self, root: Path) -> None:
+        self.path = _make_absolute(self.path, root)
 
     def __str__(self) -> str:
         return f"exclude {self.path!r}"
@@ -312,7 +306,7 @@ def glob_pattern_to_filter(s: str):
         return FilterIsLikeName(s)
 
 
-def pattern_to_filter(s: str, *, cwd: Path) -> Filter:
+def pattern_to_filter(s: str) -> Filter:
     # delete '*.md'        -- glob pattern
     # delete /.*\\.md/     -- regex
     # delete __pycache__   -- path
@@ -321,8 +315,14 @@ def pattern_to_filter(s: str, *, cwd: Path) -> Filter:
     elif "*" in s or "?" in s or "[" in s:
         return glob_pattern_to_filter(s)
     else:
-        p = Path(s)
-        if not p.is_absolute():
-            p = cwd / p
+        return FilterIs(Path(s))
 
-        return FilterIs(p)
+
+def _make_absolute(p: Path, root: Path) -> Path:
+    if p.is_absolute():
+        if p.is_relative_to(root) or p == root:
+            return p
+        else:
+            raise exceptions.PathOutsideOfRoot(path=p, root=root)
+    else:
+        return root / p

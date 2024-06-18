@@ -92,3 +92,4 @@
         - Less convenient than being able to specify filters in-line
             - however avoids weird things like `bop delete '*.txt'` having different behavior than `bop delete *.txt`
     - Rename `list` to `find`? `query`? `q`?
+- Decouple 'FilterSet' from 'FileSet'?
