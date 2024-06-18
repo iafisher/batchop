@@ -281,6 +281,30 @@ class FilterHasExtension(Filter):
         return f"has extension {self.ext!r}"
 
 
+@dataclass
+class FilterExclude(Filter):
+    path: Path
+
+    def __init__(self, path_like: PathLike, *, cwd: Path) -> None:
+        # TODO: should take Path, not PathLike
+        path = Path(path_like)
+        if not path.is_absolute():
+            self.path = cwd / path
+        else:
+            self.path = path
+
+    def test(self, p: Path) -> Result:
+        if self.path == p:
+            return (False, False)
+        else:
+            # assumption: if a parent directory was excluded we never got here in the first place
+            # b/c we returned include_children=False above
+            return True
+
+    def __str__(self) -> str:
+        return f"exclude {self.path!r}"
+
+
 def glob_pattern_to_filter(s: str):
     if "/" in s:
         return FilterIsLikePath(s)

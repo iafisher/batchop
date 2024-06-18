@@ -236,4 +236,10 @@ PATTERNS = [
         ],
         filters.FilterHasExtension,
     ),
+    # 'exclude X'
+    Description(
+        [AnyLit(["exclude", "excluding"]), String()],
+        filters.FilterExclude,
+        pass_cwd=True,
+    ),
 ]

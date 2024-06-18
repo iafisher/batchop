@@ -25,6 +25,17 @@ misc/empty_file.txt
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt
 
+> list files with ext txt exclude pride-and-prejudice/
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+
+> list files with ext txt in . exclude constitution.txt
+empty_file.txt
+misc/empty_file.txt
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+
 > list 'p*ch?.txt'
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt

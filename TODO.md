@@ -74,6 +74,11 @@
 
 - Use `NewType` to define `AbsolutePath` and `UnknownPath`
     - consistent standard for how paths are represented internally; must work for both command-line and Python API
+    - For filters: relative vs. absolute doesn't matter as long as the test paths and the filter-internal paths are
+      consistent
+    - For output: should be relative
+    - For undo: *must* be absolute
+    - Command-line tool can assume that root == cwd, but Python API can't
 - Distinction between lazy and concrete filesets
     - lazy is defined by a set of filters and can be recalculated/modified
     - concrete is a concrete list of files
