@@ -2,7 +2,7 @@ import decimal
 import re
 import sys
 from pathlib import Path
-from typing import Any, NoReturn, Optional, Union
+from typing import Any, NewType, NoReturn, Optional, Union
 
 from . import colors
 
@@ -10,6 +10,15 @@ from . import colors
 PathLike = Union[str, Path]
 NumberLike = Union[int, float, decimal.Decimal, str]
 PatternLike = Union[str, re.Pattern]
+
+AbsolutePath = NewType("AbsolutePath", Path)
+
+
+def abspath(path_like: PathLike) -> AbsolutePath:
+    if isinstance(path_like, Path):
+        return AbsolutePath(path_like.absolute())
+    else:
+        return AbsolutePath(Path(path_like).absolute())
 
 
 def unit_to_multiple(unit: str) -> Optional[int]:

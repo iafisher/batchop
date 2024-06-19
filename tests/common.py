@@ -33,6 +33,11 @@ class BaseTmpDir(unittest.TestCase):
     def assert_file_not_exists(self, path):
         self.assertFalse(os.path.exists(os.path.join(self.tmpdirpath, path)))
 
+    def _make_relative_and_sort(self, paths):
+        r = [str(p.relative_to(self.tmpdirpath)) for p in paths]
+        r.sort()
+        return r
+
     def run_script(self, name):
         context = uuid.uuid4().hex
         for cmd, output_lines in self.read_script(name):

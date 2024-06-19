@@ -12,9 +12,9 @@ from .filters import Filter
 
 @dataclass
 class FileSetSize:
-    file_count: int
-    directory_count: int
-    size_in_bytes: int
+    file_count: int = 0
+    directory_count: int = 0
+    size_in_bytes: int = 0
 
     def is_empty(self) -> bool:
         return self.file_count == 0 and self.directory_count == 0

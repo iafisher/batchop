@@ -1,206 +1,168 @@
-import abc
-import enum
 import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Generator, List, NewType, Optional, Self, Tuple, Union
+from typing import List, Optional
 
-from . import filters
-
-AbsolutePath = NewType("AbsolutePath", Path)
-PathLike = Union[Path, str]
-
-
-def abspath(path_like: PathLike) -> AbsolutePath:
-    if isinstance(path_like, Path):
-        return AbsolutePath(path_like.absolute())
-    else:
-        return AbsolutePath(Path(path_like).absolute())
-
-
-class IterateBehavior(enum.Enum):
-    DEFAULT = 1
-    ALWAYS_INCLUDE_CHILDREN = 2
-    ALWAYS_EXCLUDE_CHILDREN = 3
-
-
-@dataclass
-class FileSetSize:
-    file_count: int = 0
-    directory_count: int = 0
-    size_in_bytes: int = 0
-
-    def is_empty(self) -> bool:
-        return self.file_count == 0 and self.directory_count == 0
-
-
-class FileSet(abc.ABC):
-    @abc.abstractmethod
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
-        pass
-
-    def calculate_size(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> FileSetSize:
-        r = FileSetSize()
-        for p in self.iterate(behavior):
-            if p.is_dir():
-                r.directory_count += 1
-            else:
-                # TODO: special files?
-                r.file_count += 1
-                # TODO: handle stat() exception
-                r.size_in_bytes += p.stat().st_size
-        return r
-
-    @abc.abstractmethod
-    def make_concrete(self) -> "ConcreteFileSet":
-        pass
-
-    def count(self, behavior: IterateBehavior = IterateBehavior.DEFAULT) -> int:
-        return sum(1 for _ in self.iterate(behavior))
-
-
-class FilterSet:
-    _filters: List[filters.Filter]
-
-    def __init__(self, _filters: Optional[List[filters.Filter]] = None) -> None:
-        self._filters = _filters or []
-
-    def resolve(self, root: PathLike) -> FileSet:
-        return LazyFileSet(abspath(root), self)
-
-    def test(self, item: Path) -> Tuple[bool, bool]:
-        # TODO: terminate filter application early if possible
-        results = [filters.expand_result(f.test(item)) for f in self._filters]
-        should_include = all(include_self for include_self, _ in results)
-        should_recurse = all(include_children for _, include_children in results)
-        return should_include, should_recurse
-
-    def is_file(self) -> "FilterSet":
-        return self.copy_with(filters.FilterIsFile())
-
-    def is_empty(self) -> "FilterSet":
-        return self.copy_with(filters.FilterIsEmpty())
-
-    def copy_with(self, f: filters.Filter) -> "FilterSet":
-        return FilterSet(self._filters + [f])
-
-
-class LazyFileSet(FileSet):
-    root: AbsolutePath
-    filterset: FilterSet
-
-    def __init__(self, root: AbsolutePath, filterset: FilterSet) -> None:
-        self.root = root
-        self.filterset = filterset
-
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
-        # TODO: does this give a reasonable iteration order?
-        stack = list(self.root.iterdir())
-        while stack:
-            item = stack.pop()
-            should_include, should_recurse = self.filterset.test(item)
-
-            if should_include:
-                yield item
-
-            if behavior == IterateBehavior.ALWAYS_EXCLUDE_CHILDREN:
-                if should_include:
-                    should_recurse = False
-            elif behavior == IterateBehavior.ALWAYS_INCLUDE_CHILDREN:
-                if should_include and item.is_dir():
-                    yield from self._resolve_unconditional(item)
-                    continue
-
-            if should_recurse and item.is_dir():
-                for child in item.iterdir():
-                    stack.append(child)
-
-    def _resolve_unconditional(
-        self, p: AbsolutePath
-    ) -> Generator[AbsolutePath, None, None]:
-        stack = list(p.iterdir())
-        while stack:
-            item = stack.pop()
-            yield item
-            if item.is_dir():
-                stack.extend(list(item.iterdir()))
-
-    def make_concrete(self) -> "ConcreteFileSet":
-        return ConcreteFileSet(list(self.iterate()))
-
-
-class ConcreteFileSet(FileSet):
-    files: List[AbsolutePath]
-    _size_cache: Dict[IterateBehavior, FileSetSize]
-
-    def __init__(self, files: List[AbsolutePath]) -> None:
-        self.files = files
-        self._size_cache = {}
-
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
-        if behavior == IterateBehavior.ALWAYS_INCLUDE_CHILDREN:
-            raise NotImplementedError
-        else:
-            yield from self.files
-
-    def calculate_size(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> FileSetSize:
-        c = self._size_cache.get(behavior)
-        if c is not None:
-            return c
-
-        r = super().calculate_size(behavior)
-        self._size_cache[behavior] = r
-        return r
-
-    def make_concrete(self) -> "ConcreteFileSet":
-        return self
-
-
-FileOrFilterSet = Union[FileSet, FilterSet, str]
+from . import confirmation, english, exceptions
+from .common import AbsolutePath, PathLike, abspath
+from .db import (
+    INVOCATION_CONTEXT_PYTHON,
+    OP_TYPE_CREATE,
+    OP_TYPE_DELETE,
+    OP_TYPE_MOVE,
+    OP_TYPE_RENAME,
+    Database,
+    InvocationId,
+    InvocationOp,
+    OpType,
+)
+from .fileset2 import FileOrFilterSet, FileSet, FilterSet, IterateBehavior
 
 
 def parse_query(text: str) -> FilterSet:
     raise NotImplementedError
 
 
-class BatchOp2:
-    root: AbsolutePath
+@dataclass
+class DeleteResult:
+    paths_deleted: List[AbsolutePath]
 
-    def __init__(self, root: Optional[PathLike] = None) -> None:
+
+@dataclass
+class UndoResult:
+    original_cmdline: str
+    num_ops: int
+
+
+class BatchOp2:
+    # this is the directory the user is querying
+    root: AbsolutePath
+    # this is BatchOp's bookkeeping directory
+    directory: Path
+    db: Database
+
+    _BACKUP_DIR = "backup"
+
+    def __init__(
+        self, root: Optional[PathLike] = None, context: str = INVOCATION_CONTEXT_PYTHON
+    ) -> None:
         if root is None:
             self.root = abspath(Path.cwd())
         else:
             self.root = abspath(root)
 
-    def delete(
-        self, some_set: FileOrFilterSet, *, require_confirm: bool = True
-    ) -> None:
-        fileset = self._to_file_set(some_set)
-        if require_confirm:
-            fileset = fileset.make_concrete()
-            if not confirm_delete(fileset):
-                return
+        self.directory = self._ensure_directory()
+        self.db = Database(self.directory, context=context)
+        self.db.create_tables()
 
+    def delete(
+        self,
+        some_set: FileOrFilterSet,
+        *,
+        require_confirm: bool = True,
+        dry_run: bool = False,
+        original_cmdline: str = "",
+    ) -> Optional[DeleteResult]:
+        fileset = self._to_file_set(some_set).make_concrete()
+        if fileset.is_empty():
+            raise exceptions.EmptyFileSet
+
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset2(fileset, "Delete"):
+                return None
+
+        paths_deleted = []
+        undo_mgr = UndoManager.start(
+            self.db, self.directory / self._BACKUP_DIR, original_cmdline
+        )
         for p in fileset.iterate(IterateBehavior.ALWAYS_EXCLUDE_CHILDREN):
-            if p.is_dir():
-                shutil.rmtree(p)
-            else:
-                os.remove(p)
+            if not dry_run:
+                new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
+                shutil.move(p, new_path)
+
+            paths_deleted.append(p)
+
+        return DeleteResult(paths_deleted)
 
     def count(self, some_set: FileOrFilterSet) -> int:
         fileset = self._to_file_set(some_set)
         return fileset.count()
+
+    def undo(self, *, require_confirm: bool = True) -> Optional[UndoResult]:
+        invocation, invocation_ops = self.db.get_last_invocation()
+
+        if invocation is None:
+            raise exceptions.Base("there is no previous command to undo")
+
+        if invocation.cmdline:
+            the_last_command = f"the last command ({invocation.cmdline!r})"
+        else:
+            the_last_command = "the last command"
+
+        if not invocation.undoable:
+            if invocation.cmdline:
+                raise exceptions.Base(f"{the_last_command} was not undo-able")
+            else:
+                raise exceptions.Base(f"the last command was not undo-able")
+        if len(invocation_ops) == 0:
+            # TODO: is this case ever possible?
+            raise exceptions.Base(
+                f"{the_last_command} did not do anything so there is nothing to undo"
+            )
+
+        prompt = english.confirm_undo(invocation, invocation_ops)
+        if require_confirm and not confirmation.confirm(prompt):
+            return None
+
+        # It is VERY important to sequence the undo ops correctly.
+        #
+        # Example:
+        #   create A
+        #   move B.txt to A
+        #
+        # If we undo create A before we undo the move, we deleted A/b.txt and now we can't restore it!
+        #
+        # In reality `_undo_create` will refuse to delete a non-empty directory. Still, the principle is important.
+        _sort_undo_ops(invocation_ops)
+
+        for op in invocation_ops:
+            if op.op_type == OP_TYPE_DELETE:
+                self._undo_delete(op)
+            elif op.op_type == OP_TYPE_RENAME or op.op_type == OP_TYPE_MOVE:
+                self._undo_rename_or_move(op)
+            elif op.op_type == OP_TYPE_CREATE:
+                self._undo_create(op)
+            else:
+                raise exceptions.Impossible
+
+        self.db.delete_invocation(invocation.invocation_id)
+        return UndoResult(
+            original_cmdline=invocation.cmdline, num_ops=len(invocation_ops)
+        )
+
+    def _undo_delete(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            # TODO: check for collision?
+            shutil.move(op.path_after, op.path_before)
+
+        # TODO: what to do if path_after doesn't exist?
+        # could be innocuous, e.g. previous 'undo' command failed midway but some paths were already
+        # restored
+
+    def _undo_rename_or_move(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            # TODO: check for collision?
+            # TODO: cross-platform
+            shutil.move(op.path_after, op.path_before)
+
+    def _undo_create(self, op: InvocationOp) -> None:
+        if op.path_after.exists():
+            if op.path_after.is_dir():
+                op.path_after.rmdir()
+            else:
+                op.path_after.unlink()
+        # TODO: what to do if path_after doesn't exist?
 
     def _to_file_set(self, some_set: FileOrFilterSet) -> FileSet:
         if isinstance(some_set, FileSet):
@@ -212,18 +174,76 @@ class BatchOp2:
         else:
             raise Exception
 
+    @classmethod
+    def _ensure_directory(cls) -> Path:
+        d = cls._choose_directory()
+        d.mkdir(exist_ok=True)
+        (d / cls._BACKUP_DIR).mkdir(exist_ok=True)
+        return d
 
-def confirm_delete(fileset: FileSet) -> bool:
-    size = fileset.calculate_size(IterateBehavior.ALWAYS_INCLUDE_CHILDREN)
-    return confirm(
-        f"Delete {size.file_count} files, {size.directory_count} directories, {size.size_in_bytes} bytes? "
-    )
+    @classmethod
+    def _choose_directory(cls) -> Path:
+        # TODO: check permissions
+        env_batch_dir = os.environ.get("BATCHOP_DIR")
+        if env_batch_dir is not None:
+            return Path(env_batch_dir).absolute()
+
+        env_xdg_data_home = os.environ.get("XDG_DATA_HOME")
+        if env_xdg_data_home is not None:
+            return Path(env_xdg_data_home).absolute() / "batchop"
+
+        local_share = Path.home() / ".local" / "share"
+        if local_share.exists() and local_share.is_dir():
+            return local_share / "batchop"
+
+        return Path.home() / ".batchop"
 
 
-def confirm(prompt: str) -> bool:
-    while True:
-        r = input(prompt).strip().lower()
-        if r == "yes" or r == "y":
-            return True
-        elif r == "no" or r == "n":
-            return False
+class UndoManager:
+    db: Database
+    backup_directory: Path
+    invocation_id: InvocationId
+    i: int
+
+    @classmethod
+    def start(cls, db: Database, backup_directory: Path, cmdline: str) -> "UndoManager":
+        invocation_id = db.create_invocation(cmdline, undoable=True)
+        return cls(db, backup_directory, invocation_id)
+
+    # call `start`, don't call `__init__` directly
+    def __init__(
+        self, db: Database, backup_directory: Path, invocation_id: InvocationId
+    ) -> None:
+        self.db = db
+        self.backup_directory = backup_directory
+        self.invocation_id = invocation_id
+        self.i = 1
+
+    def add_op(
+        self,
+        op_type: OpType,
+        path_before: Optional[Path],
+        path_after: Optional[Path] = None,
+    ) -> Path:
+        if path_after is None:
+            path_after = self._make_new_path()
+
+        self.db.create_invocation_op(
+            self.invocation_id, op_type, path_before, path_after
+        )
+        return path_after
+
+    def _make_new_path(self) -> Path:
+        r = self.backup_directory / f"{self.invocation_id}___{self.i:0>8}"
+        self.i += 1
+        return r
+
+
+def _sort_undo_ops(ops: List[InvocationOp]) -> None:
+    def _key(op: InvocationOp) -> int:
+        if op.op_type == OP_TYPE_CREATE:
+            return 2
+        else:
+            return 1
+
+    ops.sort(key=_key)
