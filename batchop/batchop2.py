@@ -17,11 +17,7 @@ from .db import (
     InvocationOp,
     OpType,
 )
-from .fileset2 import FileOrFilterSet, FileSet, FilterSet, IterateBehavior
-
-
-def parse_query(text: str) -> FilterSet:
-    raise NotImplementedError
+from .fileset2 import FilterSet3
 
 
 @dataclass
@@ -58,13 +54,13 @@ class BatchOp2:
 
     def delete(
         self,
-        some_set: FileOrFilterSet,
+        filterset: FilterSet3,
         *,
         require_confirm: bool = True,
         dry_run: bool = False,
         original_cmdline: str = "",
     ) -> Optional[DeleteResult]:
-        fileset = self._to_file_set(some_set).make_concrete()
+        fileset = filterset.resolve(self.root, recursive=True)
         if fileset.is_empty():
             raise exceptions.EmptyFileSet
 
@@ -76,7 +72,7 @@ class BatchOp2:
         undo_mgr = UndoManager.start(
             self.db, self.directory / self._BACKUP_DIR, original_cmdline
         )
-        for p in fileset.iterate(IterateBehavior.ALWAYS_EXCLUDE_CHILDREN):
+        for p in fileset.exclude_children():
             if not dry_run:
                 new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
                 shutil.move(p, new_path)
@@ -85,9 +81,9 @@ class BatchOp2:
 
         return DeleteResult(paths_deleted)
 
-    def count(self, some_set: FileOrFilterSet) -> int:
-        fileset = self._to_file_set(some_set)
-        return fileset.count()
+    def count(self, filterset: FilterSet3) -> int:
+        fileset = filterset.resolve(self.root, recursive=False)
+        return len(fileset)
 
     def undo(self, *, require_confirm: bool = True) -> Optional[UndoResult]:
         invocation, invocation_ops = self.db.get_last_invocation()
@@ -163,16 +159,6 @@ class BatchOp2:
             else:
                 op.path_after.unlink()
         # TODO: what to do if path_after doesn't exist?
-
-    def _to_file_set(self, some_set: FileOrFilterSet) -> FileSet:
-        if isinstance(some_set, FileSet):
-            return some_set
-        elif isinstance(some_set, FilterSet):
-            return some_set.resolve(self.root)
-        elif isinstance(some_set, str):
-            return parse_query(some_set).resolve(self.root)
-        else:
-            raise Exception
 
     @classmethod
     def _ensure_directory(cls) -> Path:

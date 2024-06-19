@@ -17,3 +17,5 @@ __pycache__
 
 # JavaScript
 node_modules/
+
+/scratch.txt

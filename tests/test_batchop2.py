@@ -1,12 +1,63 @@
-from batchop.batchop2 import BatchOp2, FilterSet, parse_query
+from batchop.batchop2 import BatchOp2, FilterSet3
 
 from common import BaseTmpDir
+
+
+class TestFilterSet(BaseTmpDir):
+    def test_filter_set(self):
+        fileset = FilterSet3().is_file().resolve(self.tmpdirpath, recursive=False)
+        self.assert_file_set_equals(
+            fileset,
+            [
+                "constitution.txt",
+                "empty_file.txt",
+                "misc/empty_file.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
+        # recursive=True shouldn't change anything since we are only looking at files
+        fileset = FilterSet3().is_file().resolve(self.tmpdirpath, recursive=True)
+        self.assert_file_set_equals(
+            fileset,
+            [
+                "constitution.txt",
+                "empty_file.txt",
+                "misc/empty_file.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
+        fileset = FilterSet3().is_dir().resolve(self.tmpdirpath, recursive=False)
+        self.assert_file_set_equals(
+            fileset, ["empty_dir", "misc", "pride-and-prejudice"]
+        )
+
+        fileset = FilterSet3().is_dir().resolve(self.tmpdirpath, recursive=True)
+        self.assert_file_set_equals(
+            fileset,
+            [
+                "empty_dir",
+                "misc",
+                "misc/empty_file.txt",
+                "pride-and-prejudice",
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+
+        fileset = (
+            FilterSet3().is_file().is_empty().resolve(self.tmpdirpath, recursive=True)
+        )
+        self.assert_file_set_equals(fileset, ["empty_file.txt", "misc/empty_file.txt"])
 
 
 class TestBatchOp2(BaseTmpDir):
     def test_delete(self):
         bop = BatchOp2(self.tmpdirpath)
-        filterset = FilterSet().is_file().is_empty()
+        filterset = FilterSet3().is_file().is_empty()
         original_count = bop.count(filterset)
         self.assertTrue(original_count > 0)
 

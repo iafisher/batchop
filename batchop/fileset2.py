@@ -1,11 +1,10 @@
-import abc
 import enum
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Generator, List, Optional, Tuple, Union
+from typing import Iterator, List, Optional, Tuple
 
 from . import filters
 from .common import AbsolutePath, PathLike, abspath
-from .fileset import FileSetSize
 
 
 class IterateBehavior(enum.Enum):
@@ -14,46 +13,45 @@ class IterateBehavior(enum.Enum):
     ALWAYS_EXCLUDE_CHILDREN = 3
 
 
-class FileSet(abc.ABC):
-    @abc.abstractmethod
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
-        pass
+@dataclass
+class FileSetItem:
+    path: AbsolutePath
+    is_dir: bool
+    is_root: bool
+    size_bytes: int
 
-    def calculate_size(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> FileSetSize:
-        r = FileSetSize()
-        for p in self.iterate(behavior):
-            if p.is_dir():
-                r.directory_count += 1
-            else:
-                # TODO: special files?
-                r.file_count += 1
-                # TODO: handle stat() exception
-                r.size_in_bytes += p.stat().st_size
-        return r
 
-    @abc.abstractmethod
-    def make_concrete(self) -> "ConcreteFileSet":
-        pass
+@dataclass
+class FileSet3:
+    items: List[FileSetItem]
 
-    def count(self, behavior: IterateBehavior = IterateBehavior.DEFAULT) -> int:
-        return sum(1 for _ in self.iterate(behavior))
+    def file_count(self) -> int:
+        return sum(1 for item in self.items if not item.is_dir)
+
+    def dir_count(self) -> int:
+        return sum(1 for item in self.items if item.is_dir)
+
+    def size_bytes(self) -> int:
+        return sum(item.size_bytes for item in self.items)
+
+    def __iter__(self) -> Iterator[AbsolutePath]:
+        return iter(item.path for item in self.items)
+
+    def exclude_children(self) -> Iterator[AbsolutePath]:
+        return (item.path for item in self.items if item.is_root)
+
+    def __len__(self) -> int:
+        return len(self.items)
 
     def is_empty(self) -> bool:
-        return not any(self.iterate())
+        return len(self.items) == 0
 
 
-class FilterSet:
+class FilterSet3:
     _filters: List[filters.Filter]
 
     def __init__(self, _filters: Optional[List[filters.Filter]] = None) -> None:
         self._filters = _filters or []
-
-    def resolve(self, root: PathLike) -> FileSet:
-        return LazyFileSet(abspath(root), self)
 
     def test(self, item: Path) -> Tuple[bool, bool]:
         # TODO: terminate filter application early if possible
@@ -62,91 +60,51 @@ class FilterSet:
         should_recurse = all(include_children for _, include_children in results)
         return should_include, should_recurse
 
-    def is_file(self) -> "FilterSet":
-        return self.copy_with(filters.FilterIsFile())
+    def resolve(self, root: PathLike, *, recursive: bool) -> FileSet3:
+        r = []
 
-    def is_empty(self) -> "FilterSet":
-        return self.copy_with(filters.FilterIsEmpty())
-
-    def copy_with(self, f: filters.Filter) -> "FilterSet":
-        return FilterSet(self._filters + [f])
-
-
-class LazyFileSet(FileSet):
-    root: AbsolutePath
-    filterset: FilterSet
-
-    def __init__(self, root: AbsolutePath, filterset: FilterSet) -> None:
-        self.root = root
-        self.filterset = filterset
-
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
         # TODO: does this give a reasonable iteration order?
-        stack = list(self.root.iterdir())
+        # (path, is_root, skip_filters)
+        stack = [(p, True, False) for p in abspath(root).iterdir()]
         while stack:
-            item = stack.pop()
-            should_include, should_recurse = self.filterset.test(item)
+            item, is_root, skip_filters = stack.pop()
+            is_dir = item.is_dir()
+            if skip_filters:
+                should_include, should_recurse = True, True
+            else:
+                should_include, should_recurse = self.test(item)
 
             if should_include:
-                yield item
+                # TODO: handle stat() exception
+                size_bytes = item.stat().st_size if not is_dir else 0
+                r.append(
+                    FileSetItem(
+                        item, is_dir=is_dir, is_root=is_root, size_bytes=size_bytes
+                    )
+                )
 
-            if behavior == IterateBehavior.ALWAYS_EXCLUDE_CHILDREN:
-                if should_include:
-                    should_recurse = False
-            elif behavior == IterateBehavior.ALWAYS_INCLUDE_CHILDREN:
-                if should_include and item.is_dir():
-                    yield from self._resolve_unconditional(item)
-                    continue
-
-            if should_recurse and item.is_dir():
+            if should_recurse and is_dir:
+                is_root = not should_include
                 for child in item.iterdir():
-                    stack.append(child)
+                    stack.append(
+                        (
+                            child,
+                            is_root,
+                            # skip_filters=
+                            not is_root and recursive,
+                        )
+                    )
 
-    def _resolve_unconditional(
-        self, p: AbsolutePath
-    ) -> Generator[AbsolutePath, None, None]:
-        stack = list(p.iterdir())
-        while stack:
-            item = stack.pop()
-            yield item
-            if item.is_dir():
-                stack.extend(list(item.iterdir()))
+        return FileSet3(r)
 
-    def make_concrete(self) -> "ConcreteFileSet":
-        return ConcreteFileSet(list(self.iterate()))
+    def is_file(self) -> "FilterSet3":
+        return self.copy_with(filters.FilterIsFile())
 
+    def is_dir(self) -> "FilterSet3":
+        return self.copy_with(filters.FilterIsDirectory())
 
-class ConcreteFileSet(FileSet):
-    files: List[AbsolutePath]
-    _size_cache: Dict[IterateBehavior, FileSetSize]
+    def is_empty(self) -> "FilterSet3":
+        return self.copy_with(filters.FilterIsEmpty())
 
-    def __init__(self, files: List[AbsolutePath]) -> None:
-        self.files = files
-        self._size_cache = {}
-
-    def iterate(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> Generator[AbsolutePath, None, None]:
-        if behavior == IterateBehavior.ALWAYS_INCLUDE_CHILDREN:
-            raise NotImplementedError
-        else:
-            yield from self.files
-
-    def calculate_size(
-        self, behavior: IterateBehavior = IterateBehavior.DEFAULT
-    ) -> FileSetSize:
-        c = self._size_cache.get(behavior)
-        if c is not None:
-            return c
-
-        r = super().calculate_size(behavior)
-        self._size_cache[behavior] = r
-        return r
-
-    def make_concrete(self) -> "ConcreteFileSet":
-        return self
-
-
-FileOrFilterSet = Union[FileSet, FilterSet, str]
+    def copy_with(self, f: filters.Filter) -> "FilterSet3":
+        return FilterSet3(self._filters + [f])

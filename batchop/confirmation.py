@@ -2,8 +2,8 @@ import random
 import sys
 
 from . import english, exceptions
-from .fileset2 import FileSet as FileSet2, IterateBehavior
-from .fileset import FileSet, RecurseBehavior
+from .fileset2 import FileSet3, IterateBehavior
+from .fileset import FileSet, FileSetSize, RecurseBehavior
 
 
 def confirm(prompt: str) -> bool:
@@ -61,8 +61,12 @@ def confirm_operation_on_fileset(fs: FileSet, verb: str) -> bool:
             )
 
 
-def confirm_operation_on_fileset2(fs: FileSet2, verb: str) -> bool:
-    size = fs.calculate_size(IterateBehavior.ALWAYS_INCLUDE_CHILDREN)
+def confirm_operation_on_fileset2(fs: FileSet3, verb: str) -> bool:
+    size = FileSetSize(
+        file_count=fs.file_count(),
+        directory_count=fs.dir_count(),
+        size_in_bytes=fs.size_bytes(),
+    )
     if size.is_empty():
         raise exceptions.EmptyFileSet
 
@@ -90,10 +94,10 @@ def confirm_operation_on_fileset2(fs: FileSet2, verb: str) -> bool:
             print("  random:        list 10 random files")
             print("  help:          print this dialog")
         elif response in ("list", "l", "ls"):
-            for path in fs.iterate(IterateBehavior.ALWAYS_INCLUDE_CHILDREN):
+            for path in fs:
                 print(path)
         elif response == "random":
-            all_paths = list(fs.iterate(IterateBehavior.ALWAYS_INCLUDE_CHILDREN))
+            all_paths = list(fs)
             random.shuffle(all_paths)
             for path in all_paths[:10]:
                 print(path)

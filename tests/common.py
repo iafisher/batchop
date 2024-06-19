@@ -33,6 +33,12 @@ class BaseTmpDir(unittest.TestCase):
     def assert_file_not_exists(self, path):
         self.assertFalse(os.path.exists(os.path.join(self.tmpdirpath, path)))
 
+    def assert_file_set_equals(self, actual, expected):
+        self.assertEqual(
+            list(sorted(p.relative_to(self.tmpdirpath) for p in actual)),
+            list(sorted(Path(s) for s in expected)),
+        )
+
     def _make_relative_and_sort(self, paths):
         r = [str(p.relative_to(self.tmpdirpath)) for p in paths]
         r.sort()
