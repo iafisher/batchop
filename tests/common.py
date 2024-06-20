@@ -7,8 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from batchop.batchop import BatchOp, main_execute
-from batchop.fileset import FileSet
+from batchop.main import main_execute
 
 
 class BaseTmpDir(unittest.TestCase):
@@ -21,8 +20,6 @@ class BaseTmpDir(unittest.TestCase):
         # can't exist in the test_tree/ directory
         os.mkdir(os.path.join(self.tmpdirpath, "empty_dir"))
 
-        self.bop = BatchOp()
-        self.fs = FileSet(self.tmpdirpath)
         self._original_tree = self._list_files()
 
     def tearDown(self):

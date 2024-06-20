@@ -1,279 +1,185 @@
-import argparse
 import os
 import re
-import subprocess
+import shutil
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Generator, Iterable, List, Optional, Sequence, Union
+from typing import Dict, List, Optional
 
-from . import (
-    colors,
-    confirmation,
-    english,
-    exceptions,
-    globreplace,
-    parsing,
-    __version__,
-)
-from .common import PathLike, err_and_bail, plural
+from . import confirmation, english, exceptions, globreplace
+from .common import AbsolutePath, PathLike, abspath
 from .db import (
-    Database,
-    InvocationOp,
-    INVOCATION_CONTEXT_CLI,
     INVOCATION_CONTEXT_PYTHON,
-    OP_TYPE_DELETE,
-    OP_TYPE_RENAME,
-    InvocationId,
-    OpType,
-    OP_TYPE_MOVE,
     OP_TYPE_CREATE,
+    OP_TYPE_DELETE,
+    OP_TYPE_MOVE,
+    OP_TYPE_RENAME,
+    Database,
+    InvocationId,
+    InvocationOp,
+    OpType,
 )
-from .fileset import FileSet, RecurseBehavior
+from .fileset import FileSet, FilterSet
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--directory")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print what the command would do without doing it.",
-    )
-    parser.add_argument(
-        "--no-confirm",
-        action="store_true",
-        help="Execute the command without confirmation. Not recommended.",
-    )
-    parser.add_argument(
-        "--special-files",
-        action="store_true",
-        help="Include files that are neither regular files nor directories. This is rarely desirable.",
-    )
-    parser.add_argument("words", nargs="*")
-    parser.add_argument("--version", action="version", version=__version__)
-    args = parser.parse_args()
-
-    try:
-        if len(args.words) > 0:
-            words = args.words[0] if len(args.words) == 1 else args.words
-            main_execute(
-                words,
-                directory=args.directory,
-                dry_run=args.dry_run,
-                require_confirm=not args.no_confirm,
-                special_files=args.special_files,
-            )
-        else:
-            main_interactive(
-                args.directory, dry_run=args.dry_run, special_files=args.special_files
-            )
-    except exceptions.Base as e:
-        err_and_bail(e.fancy())
+@dataclass
+class DeleteResult:
+    paths_deleted: List[AbsolutePath]
 
 
-def main_execute(
-    words: Union[str, List[str]],
-    *,
-    directory: Optional[str],
-    require_confirm: bool,
-    dry_run: bool = False,
-    special_files: bool = False,
-    context: str = INVOCATION_CONTEXT_CLI,
-    sort_output: bool = False,
-) -> None:
-    if directory is not None:
-        os.chdir(directory)
-
-    root = Path(".").absolute()
-    original_cmdline = words if isinstance(words, str) else " ".join(words)
-    parsed_cmd = parsing.parse_command(words)
-
-    bop = BatchOp(context=context)
-    if isinstance(parsed_cmd, parsing.UnaryCommand):
-        fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
-        fileset.optimize()
-        if parsed_cmd.command == "delete":
-            bop.delete(
-                fileset,
-                dry_run=dry_run,
-                require_confirm=require_confirm,
-                original_cmdline=original_cmdline,
-            )
-        elif parsed_cmd.command == "list":
-            it: Iterable[Path] = bop.list(fileset)
-            if sort_output:
-                it = sorted(it)
-
-            for p in it:
-                print(p.relative_to(root))
-        elif parsed_cmd.command == "count":
-            n = bop.count(fileset)
-            print(n)
-        else:
-            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
-    elif isinstance(parsed_cmd, parsing.SpecialCommand):
-        if parsed_cmd.command == "undo":
-            bop.undo(require_confirm=require_confirm)
-        else:
-            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
-    elif isinstance(parsed_cmd, parsing.RenameCommand):
-        fileset = FileSet(root, special_files=special_files)
-        fileset.optimize()
-        bop.rename(
-            fileset,
-            parsed_cmd.old,
-            parsed_cmd.new,
-            dry_run=dry_run,
-            require_confirm=require_confirm,
-            original_cmdline=original_cmdline,
-        )
-    elif isinstance(parsed_cmd, parsing.MoveCommand):
-        fileset = FileSet(root, parsed_cmd.filters, special_files=special_files)
-        fileset.optimize()
-        bop.move(
-            fileset,
-            parsed_cmd.destination,
-            dry_run=dry_run,
-            require_confirm=require_confirm,
-            original_cmdline=original_cmdline,
-        )
-    else:
-        raise exceptions.Impossible
+@dataclass
+class MoveResult:
+    paths_moved: List[AbsolutePath]
+    destination: AbsolutePath
 
 
-def main_interactive(
-    d: Optional[str], *, dry_run: bool = False, special_files: bool = False
-) -> None:
-    import readline
+@dataclass
+class RenameResult:
+    paths_renamed: Dict[AbsolutePath, str]
 
-    root = path_or_default(d).absolute()
-    fs = FileSet(root, special_files=special_files).is_not_hidden()
 
-    if len(fs.filters) > 0:
-        print("Filters applied by default: ")
-        for f in fs.filters:
-            print(f"  {f}")
-        print()
-
-    # whether to re-calculate the file set on next iteration of loop
-    recalculate = True
-    while True:
-        # TODO: default to ignoring .git + .gitignore?
-        if recalculate:
-            size = fs.calculate_size()
-            print(f"{plural(size.file_count, 'file', color=True)}", end="")
-            if size.directory_count > 0:
-                print(
-                    f", {plural(size.directory_count, 'directory', 'directories', color=True)}"
-                )
-            else:
-                print()
-
-        recalculate = False
-        try:
-            s = input("> ").strip()
-        except exceptions.Syntax as e:
-            print(f"error: {e}")
-            continue
-        except EOFError:
-            print()
-            break
-
-        if not s:
-            continue
-
-        # TODO: other commands (and respect --dry-run)
-        if s.lower() == "list":
-            for p in fs.resolve():
-                print(p)
-            continue
-        elif s[0] == "!":
-            cmd = s[1:]
-            if cmd == "pop":
-                fs.pop()
-                recalculate = True
-            elif cmd == "clear":
-                fs.clear()
-                recalculate = True
-            elif cmd == "filter" or cmd == "filters":
-                for f in fs.filters:
-                    print(f)
-            elif cmd == "h" or cmd == "help":
-                print("Directives:")
-                print("  !clear              clear all filters")
-                print("  !filter/!filters    print list of current filters")
-                print("  !pop                remove the last-applied filter")
-            else:
-                print(
-                    f"{colors.danger('error:')} unknown directive: {cmd!r} (enter !help to see available directives)"
-                )
-
-            continue
-
-        try:
-            tokens = parsing.tokenize(s)
-            filters = parsing.parse_preds(tokens)
-        except exceptions.Base as e:
-            print(f"{colors.danger('error:')} {e.fancy()}")
-            continue
-
-        fs.filters.extend(filters)
-        recalculate = True
+@dataclass
+class UndoResult:
+    original_cmdline: str
+    num_ops: int
 
 
 class BatchOp:
-    # this is BatchOp's bookkeeping directory, not the directory the user is querying
-    directory: Path
+    # this is the directory the user is querying
+    root: AbsolutePath
+    # this is BatchOp's bookkeeping directory
+    directory: AbsolutePath
     db: Database
 
-    _BACKUP_DIR = "backup"
+    def __init__(
+        self, root: Optional[PathLike] = None, context: str = INVOCATION_CONTEXT_PYTHON
+    ) -> None:
+        if root is None:
+            self.root = abspath(Path.cwd())
+        else:
+            self.root = abspath(root)
 
-    def __init__(self, *, context: str = INVOCATION_CONTEXT_PYTHON) -> None:
-        self.directory = self._ensure_directory()
+        self.directory = self._choose_directory()
         self.db = Database(self.directory, context=context)
         self.db.create_tables()
 
-    def list(self, fileset: FileSet) -> Generator[Path, None, None]:
-        yield from list(fileset.resolve())
+        self.directory.mkdir(exist_ok=True)
+        self.backup_dir().mkdir(exist_ok=True)
 
-    def count(self, fileset: FileSet) -> int:
-        return sum(1 for _ in fileset.resolve())
+    def count(self, filterset: FilterSet) -> int:
+        fileset = filterset.resolve(self.root, recursive=False)
+        return len(fileset)
 
     def delete(
         self,
-        fileset: FileSet,
+        filterset: FilterSet,
         *,
-        dry_run: bool = False,
         require_confirm: bool = True,
+        dry_run: bool = False,
         original_cmdline: str = "",
-    ) -> None:
-        # TODO: avoid computing entire file-set twice?
-        # TODO: use `du` command if available
-        size = fileset.calculate_size(recurse=RecurseBehavior.INCLUDE_DIR_CHILDREN)
-        if size.is_empty():
+    ) -> Optional[DeleteResult]:
+        fileset = filterset.resolve(self.root, recursive=True)
+        if fileset.is_empty():
             raise exceptions.EmptyFileSet
 
-        if require_confirm and not confirmation.confirm_operation_on_fileset(
-            fileset, "Delete"
-        ):
-            print("Aborted.")
-            return
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset(fileset, "Delete"):
+                return None
 
-        undo_mgr = UndoManager.start(
-            self.db, self.directory / self._BACKUP_DIR, original_cmdline
-        )
-        for p in fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN):
-            if dry_run:
-                print(f"remove {p}")
-            else:
-                new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
-                # TODO: any way to do this in batches?
-                # TODO: cross-platform
-                sh(["mv", p, new_path])
-
+        paths_deleted = []
         if dry_run:
-            self._dry_run_notice()
+            paths_deleted = list(fileset.exclude_children())
+        else:
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            for p in fileset.exclude_children():
+                new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
+                shutil.move(p, new_path)
+                paths_deleted.append(p)
 
-    def undo(self, *, require_confirm: bool = True) -> None:
+        return DeleteResult(paths_deleted)
+
+    def list(self, filterset: FilterSet) -> List[AbsolutePath]:
+        return list(filterset.resolve(self.root, recursive=False))
+
+    def move(
+        self,
+        filterset: FilterSet,
+        destination_like: PathLike,
+        *,
+        require_confirm: bool = True,
+        dry_run: bool = False,
+        original_cmdline: str = "",
+    ) -> Optional[MoveResult]:
+        destination = abspath(destination_like, root=self.root)
+
+        fileset = filterset.resolve(self.root, recursive=True)
+        if fileset.is_empty():
+            raise exceptions.EmptyFileSet
+
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset(fileset, "Move"):
+                return None
+
+        _detect_duplicates(fileset)
+
+        paths_moved = list(fileset)
+        if not dry_run:
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            # TODO: add to confirmation message if destination will be created
+            # TODO: register with undo manager
+            # it is important to do this AFTER calling `fileset.resolve()` as otherwise the destination directory could
+            # be picked up as a source
+            undo_mgr.add_op(OP_TYPE_CREATE, None, destination)
+            destination.mkdir(parents=False, exist_ok=True)
+
+            for p in paths_moved:
+                undo_mgr.add_op(OP_TYPE_MOVE, p, destination / p.name)
+                # TODO: do in batches?
+                shutil.move(p, destination)
+
+        return MoveResult(paths_moved, destination)
+
+    def rename(
+        self,
+        filterset: FilterSet,
+        old: str,
+        new: str,
+        *,
+        require_confirm: bool = True,
+        dry_run: bool = False,
+        original_cmdline: str = "",
+    ) -> Optional[RenameResult]:
+        pattern = re.compile(globreplace.glob_to_regex(old))
+        repl = globreplace.glob_to_regex_repl(new)
+
+        fileset = filterset.resolve(self.root, recursive=False)
+        if fileset.is_empty():
+            raise exceptions.EmptyFileSet
+
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset(fileset, "Rename"):
+                return None
+
+        paths_renamed = {}
+        for p in fileset:
+            new_name = pattern.sub(repl, p.name)
+            if new_name == p.name:
+                continue
+
+            paths_renamed[p] = new_name
+
+        if not dry_run:
+            # TODO: detect name collisions before starting
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            for p, new_name in paths_renamed.items():
+                new_path = p.parent / new_name
+                undo_mgr.add_op(OP_TYPE_RENAME, p, new_path)
+                # TODO: don't overwrite existing
+                shutil.move(p, new_path)
+
+        return RenameResult(paths_renamed)
+
+    # TODO: should this take an explicit undo ID?
+    def undo(self, *, require_confirm: bool = True) -> Optional[UndoResult]:
         invocation, invocation_ops = self.db.get_last_invocation()
 
         if invocation is None:
@@ -296,9 +202,8 @@ class BatchOp:
             )
 
         prompt = english.confirm_undo(invocation, invocation_ops)
-        if require_confirm and not confirm(prompt):
-            print("Aborted.")
-            return
+        if require_confirm and not confirmation.confirm(prompt):
+            return None
 
         # It is VERY important to sequence the undo ops correctly.
         #
@@ -322,12 +227,14 @@ class BatchOp:
                 raise exceptions.Impossible
 
         self.db.delete_invocation(invocation.invocation_id)
+        return UndoResult(
+            original_cmdline=invocation.cmdline, num_ops=len(invocation_ops)
+        )
 
     def _undo_delete(self, op: InvocationOp) -> None:
         if op.path_after.exists():
             # TODO: check for collision?
-            # TODO: cross-platform
-            sh(["mv", op.path_after, op.path_before])
+            shutil.move(op.path_after, op.path_before)
 
         # TODO: what to do if path_after doesn't exist?
         # could be innocuous, e.g. previous 'undo' command failed midway but some paths were already
@@ -337,7 +244,7 @@ class BatchOp:
         if op.path_after.exists():
             # TODO: check for collision?
             # TODO: cross-platform
-            sh(["mv", op.path_after, op.path_before])
+            shutil.move(op.path_after, op.path_before)
 
     def _undo_create(self, op: InvocationOp) -> None:
         if op.path_after.exists():
@@ -347,118 +254,25 @@ class BatchOp:
                 op.path_after.unlink()
         # TODO: what to do if path_after doesn't exist?
 
-    def rename(
-        self,
-        fileset: FileSet,
-        old: str,
-        new: str,
-        *,
-        dry_run: bool = False,
-        require_confirm: bool = True,
-        original_cmdline: str = "",
-    ) -> None:
-        # TODO: detect name collisions
-        pattern = re.compile(globreplace.glob_to_regex(old))
-        repl = globreplace.glob_to_regex_repl(new)
-
-        fileset = fileset.matches(pattern)
-
-        if require_confirm and not confirmation.confirm_operation_on_fileset(
-            fileset, "Rename"
-        ):
-            print("Aborted.")
-            return
-
-        undo_mgr = UndoManager.start(
-            self.db, self.directory / self._BACKUP_DIR, original_cmdline
-        )
-        for p in fileset.resolve():
-            new_name = pattern.sub(repl, p.name)
-            if new_name == p.name:
-                continue
-
-            if dry_run:
-                print(f"rename {p} to {new_name}")
-            else:
-                new_path = p.parent / new_name
-                undo_mgr.add_op(OP_TYPE_RENAME, p, new_path)
-                # TODO: cross-platform
-                sh(["mv", "-n", p, new_path])
-
-        if dry_run:
-            self._dry_run_notice()
-
-    def move(
-        self,
-        fileset: FileSet,
-        destination_like: PathLike,
-        *,
-        dry_run: bool = False,
-        require_confirm: bool = True,
-        original_cmdline: str = "",
-    ) -> None:
-        destination = Path(destination_like).absolute()
-
-        if require_confirm and not confirmation.confirm_operation_on_fileset(
-            fileset, "Move"
-        ):
-            print("Aborted.")
-            return
-
-        paths_to_move = list(
-            fileset.resolve(recurse=RecurseBehavior.EXCLUDE_DIR_CHILDREN)
-        )
-
-        _detect_duplicates(paths_to_move)
-
-        if dry_run:
-            for p in paths_to_move:
-                print(f"move {p} to {destination}")
-            self._dry_run_notice()
-        else:
-            undo_mgr = UndoManager.start(
-                self.db, self.directory / self._BACKUP_DIR, original_cmdline
-            )
-
-            # TODO: add to confirmation message if destination will be created
-            # TODO: register with undo manager
-            # it is important to do this AFTER calling `fileset.resolve()` as otherwise the destination directory could
-            # be picked up as a source
-            undo_mgr.add_op(OP_TYPE_CREATE, None, destination)
-            destination.mkdir(parents=False, exist_ok=True)
-
-            for p in paths_to_move:
-                undo_mgr.add_op(OP_TYPE_MOVE, p, destination / p.name)
-            # TODO: pass `paths_to_move` in batches if really long
-            sh(["mv"] + paths_to_move + [destination])
-
-    def _dry_run_notice(self):
-        print()
-        print("Dry run: no files changed.")
+    def backup_dir(self) -> AbsolutePath:
+        return self.directory / "backup"
 
     @classmethod
-    def _ensure_directory(cls) -> Path:
-        d = cls._choose_directory()
-        d.mkdir(exist_ok=True)
-        (d / cls._BACKUP_DIR).mkdir(exist_ok=True)
-        return d
-
-    @classmethod
-    def _choose_directory(cls) -> Path:
+    def _choose_directory(cls) -> AbsolutePath:
         # TODO: check permissions
         env_batch_dir = os.environ.get("BATCHOP_DIR")
         if env_batch_dir is not None:
-            return Path(env_batch_dir).absolute()
+            return AbsolutePath(Path(env_batch_dir).absolute())
 
         env_xdg_data_home = os.environ.get("XDG_DATA_HOME")
         if env_xdg_data_home is not None:
-            return Path(env_xdg_data_home).absolute() / "batchop"
+            return AbsolutePath(Path(env_xdg_data_home).absolute() / "batchop")
 
         local_share = Path.home() / ".local" / "share"
         if local_share.exists() and local_share.is_dir():
-            return local_share / "batchop"
+            return AbsolutePath(local_share / "batchop")
 
-        return Path.home() / ".batchop"
+        return AbsolutePath(Path.home().absolute() / ".batchop")
 
 
 class UndoManager:
@@ -501,6 +315,15 @@ class UndoManager:
         return r
 
 
+def _detect_duplicates(fileset: FileSet) -> None:
+    already_seen: Dict[str, Path] = {}
+    for path in fileset:
+        other = already_seen.get(path.name)
+        if other is not None:
+            raise exceptions.PathCollision(path1=path, path2=other)
+        already_seen[path.name] = path
+
+
 def _sort_undo_ops(ops: List[InvocationOp]) -> None:
     def _key(op: InvocationOp) -> int:
         if op.op_type == OP_TYPE_CREATE:
@@ -509,38 +332,3 @@ def _sort_undo_ops(ops: List[InvocationOp]) -> None:
             return 1
 
     ops.sort(key=_key)
-
-
-def _detect_duplicates(paths: List[Path]) -> None:
-    already_seen: Dict[str, Path] = {}
-    for path in paths:
-        other = already_seen.get(path.name)
-        if other is not None:
-            raise exceptions.PathCollision(path1=path, path2=other)
-        already_seen[path.name] = path
-
-
-def sh(args: Sequence[Union[str, Path]]) -> None:
-    subprocess.run(args, capture_output=True, check=True)
-
-
-def confirm(prompt: str) -> bool:
-    while True:
-        r = input(prompt).strip().lower()
-        if r == "yes" or r == "y":
-            return True
-        elif r == "no" or r == "n":
-            return False
-        else:
-            print("Please enter 'yes' or 'no'.")
-
-
-def path_or_default(p: Optional[PathLike]) -> Path:
-    if p is None:
-        r = Path(".")
-    elif isinstance(p, Path):
-        r = p
-    else:
-        r = Path(p)
-
-    return r

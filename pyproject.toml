@@ -10,7 +10,7 @@ packages = [{include = "batchop"}]
 python = "^3.11"
 
 [tool.poetry.scripts]
-batchop = "batchop.batchop:main"
+batchop = "batchop.main:main"
 
 
 [tool.poetry.group.dev.dependencies]
