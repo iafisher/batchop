@@ -2,7 +2,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from . import confirmation, english, exceptions
 from .common import AbsolutePath, PathLike, abspath
@@ -17,12 +17,18 @@ from .db import (
     InvocationOp,
     OpType,
 )
-from .fileset2 import FilterSet3
+from .fileset2 import FileSet3, FilterSet3
 
 
 @dataclass
 class DeleteResult:
     paths_deleted: List[AbsolutePath]
+
+
+@dataclass
+class MoveResult:
+    paths_moved: List[AbsolutePath]
+    destination: AbsolutePath
 
 
 @dataclass
@@ -35,10 +41,8 @@ class BatchOp2:
     # this is the directory the user is querying
     root: AbsolutePath
     # this is BatchOp's bookkeeping directory
-    directory: Path
+    directory: AbsolutePath
     db: Database
-
-    _BACKUP_DIR = "backup"
 
     def __init__(
         self, root: Optional[PathLike] = None, context: str = INVOCATION_CONTEXT_PYTHON
@@ -48,9 +52,16 @@ class BatchOp2:
         else:
             self.root = abspath(root)
 
-        self.directory = self._ensure_directory()
+        self.directory = self._choose_directory()
         self.db = Database(self.directory, context=context)
         self.db.create_tables()
+
+        self.directory.mkdir(exist_ok=True)
+        self.backup_dir().mkdir(exist_ok=True)
+
+    def count(self, filterset: FilterSet3) -> int:
+        fileset = filterset.resolve(self.root, recursive=False)
+        return len(fileset)
 
     def delete(
         self,
@@ -69,22 +80,56 @@ class BatchOp2:
                 return None
 
         paths_deleted = []
-        undo_mgr = UndoManager.start(
-            self.db, self.directory / self._BACKUP_DIR, original_cmdline
-        )
-        for p in fileset.exclude_children():
-            if not dry_run:
+        if dry_run:
+            paths_deleted = list(fileset.exclude_children())
+        else:
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            for p in fileset.exclude_children():
                 new_path = undo_mgr.add_op(OP_TYPE_DELETE, p)
                 shutil.move(p, new_path)
-
-            paths_deleted.append(p)
+                paths_deleted.append(p)
 
         return DeleteResult(paths_deleted)
 
-    def count(self, filterset: FilterSet3) -> int:
-        fileset = filterset.resolve(self.root, recursive=False)
-        return len(fileset)
+    def move(
+        self,
+        filterset: FilterSet3,
+        destination_like: PathLike,
+        *,
+        require_confirm: bool = True,
+        dry_run: bool = False,
+        original_cmdline: str = "",
+    ) -> Optional[MoveResult]:
+        destination = abspath(destination_like, root=self.root)
 
+        fileset = filterset.resolve(self.root, recursive=True)
+        if fileset.is_empty():
+            raise exceptions.EmptyFileSet
+
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset2(fileset, "Move"):
+                return None
+
+        _detect_duplicates(fileset)
+
+        paths_moved = list(fileset)
+        if not dry_run:
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            # TODO: add to confirmation message if destination will be created
+            # TODO: register with undo manager
+            # it is important to do this AFTER calling `fileset.resolve()` as otherwise the destination directory could
+            # be picked up as a source
+            undo_mgr.add_op(OP_TYPE_CREATE, None, destination)
+            destination.mkdir(parents=False, exist_ok=True)
+
+            for p in paths_moved:
+                undo_mgr.add_op(OP_TYPE_MOVE, p, destination / p.name)
+                # TODO: do in batches?
+                shutil.move(p, destination)
+
+        return MoveResult(paths_moved, destination)
+
+    # TODO: should this take an explicit undo ID?
     def undo(self, *, require_confirm: bool = True) -> Optional[UndoResult]:
         invocation, invocation_ops = self.db.get_last_invocation()
 
@@ -160,29 +205,25 @@ class BatchOp2:
                 op.path_after.unlink()
         # TODO: what to do if path_after doesn't exist?
 
-    @classmethod
-    def _ensure_directory(cls) -> Path:
-        d = cls._choose_directory()
-        d.mkdir(exist_ok=True)
-        (d / cls._BACKUP_DIR).mkdir(exist_ok=True)
-        return d
+    def backup_dir(self) -> AbsolutePath:
+        return self.directory / "backup"
 
     @classmethod
-    def _choose_directory(cls) -> Path:
+    def _choose_directory(cls) -> AbsolutePath:
         # TODO: check permissions
         env_batch_dir = os.environ.get("BATCHOP_DIR")
         if env_batch_dir is not None:
-            return Path(env_batch_dir).absolute()
+            return AbsolutePath(Path(env_batch_dir).absolute())
 
         env_xdg_data_home = os.environ.get("XDG_DATA_HOME")
         if env_xdg_data_home is not None:
-            return Path(env_xdg_data_home).absolute() / "batchop"
+            return AbsolutePath(Path(env_xdg_data_home).absolute() / "batchop")
 
         local_share = Path.home() / ".local" / "share"
         if local_share.exists() and local_share.is_dir():
-            return local_share / "batchop"
+            return AbsolutePath(local_share / "batchop")
 
-        return Path.home() / ".batchop"
+        return AbsolutePath(Path.home().absolute() / ".batchop")
 
 
 class UndoManager:
@@ -223,6 +264,15 @@ class UndoManager:
         r = self.backup_directory / f"{self.invocation_id}___{self.i:0>8}"
         self.i += 1
         return r
+
+
+def _detect_duplicates(fileset: FileSet3) -> None:
+    already_seen: Dict[str, Path] = {}
+    for path in fileset:
+        other = already_seen.get(path.name)
+        if other is not None:
+            raise exceptions.PathCollision(path1=path, path2=other)
+        already_seen[path.name] = path
 
 
 def _sort_undo_ops(ops: List[InvocationOp]) -> None:

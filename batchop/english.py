@@ -4,6 +4,7 @@ from . import colors, exceptions
 from .common import bytes_to_unit, plural
 from .db import Invocation, InvocationOp
 from .fileset import FileSetSize
+from .fileset2 import FileSet3
 
 
 def confirm_delete_n_files(size: FileSetSize) -> str:

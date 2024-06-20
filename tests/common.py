@@ -23,6 +23,7 @@ class BaseTmpDir(unittest.TestCase):
 
         self.bop = BatchOp()
         self.fs = FileSet(self.tmpdirpath)
+        self._original_tree = self._list_files()
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -39,10 +40,16 @@ class BaseTmpDir(unittest.TestCase):
             list(sorted(Path(s) for s in expected)),
         )
 
+    def assert_unchanged(self):
+        self.assertEqual(self._original_tree, self._list_files())
+
     def _make_relative_and_sort(self, paths):
         r = [str(p.relative_to(self.tmpdirpath)) for p in paths]
         r.sort()
         return r
+
+    def _list_files(self):
+        return list(sorted(Path(self.tmpdirpath).rglob("*")))
 
     def run_script(self, name):
         context = uuid.uuid4().hex

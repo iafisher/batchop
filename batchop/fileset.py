@@ -53,9 +53,7 @@ class FileSet:
         if not self.special_files:
             all_filters.append(filters.FilterIsSpecial().negate())
         all_filters.extend(self.filters)
-
-        for f in all_filters:
-            f.make_absolute(self.root)
+        all_filters = [f.make_absolute(self.root) for f in all_filters]
 
         # TODO: does this give a reasonable iteration order?
         stack = list(self.root.iterdir())
@@ -223,8 +221,7 @@ def _promote_is_in_path_filter_to_root(fs: FileSet) -> None:
     i = None
     for j, f in enumerate(fs.filters):
         if isinstance(f, filters.FilterIsInPath):
-            f.make_absolute(fs.root)
-            fs.root = f.path
+            fs.root = filters._make_absolute(f.path, fs.root)
             i = j
             break
 

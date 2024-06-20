@@ -14,11 +14,17 @@ PatternLike = Union[str, re.Pattern]
 AbsolutePath = NewType("AbsolutePath", Path)
 
 
-def abspath(path_like: PathLike) -> AbsolutePath:
-    if isinstance(path_like, Path):
-        return AbsolutePath(path_like.absolute())
+def abspath(
+    path_like: PathLike, *, root: Optional[AbsolutePath] = None
+) -> AbsolutePath:
+    p = AbsolutePath(Path(path_like))
+    if p.is_absolute():
+        return p
+
+    if root is not None:
+        return root / p
     else:
-        return AbsolutePath(Path(path_like).absolute())
+        return p.absolute()
 
 
 def unit_to_multiple(unit: str) -> Optional[int]:

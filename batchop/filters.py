@@ -27,9 +27,9 @@ class Filter(abc.ABC):
 
     # only subclasses that internally store a path need to override this method
     # typical implementation:
-    #   self.path = _make_absolute(self.path, root)
-    def make_absolute(self, root: Path) -> None:
-        pass
+    #   return FilterXYZ(_make_absolute(self.path, root))
+    def make_absolute(self, root: Path) -> "Filter":
+        return self
 
     def negate(self) -> "Filter":
         # most filters can be negated generically but some have a specialized negation that is more
@@ -109,8 +109,8 @@ class FilterIs(Filter):
     def test(self, p: Path) -> Result:
         return self.path == p
 
-    def make_absolute(self, root: Path) -> None:
-        self.path = _make_absolute(self.path, root)
+    def make_absolute(self, root: Path) -> "Filter":
+        return FilterIs(_make_absolute(self.path, root))
 
     def __str__(self) -> str:
         return f"is {self.path}"
@@ -158,8 +158,8 @@ class FilterIsInPath(Filter):
     def test(self, p: Path) -> Result:
         return test_is_in_exact(self.path, p)
 
-    def make_absolute(self, root: Path) -> None:
-        self.path = _make_absolute(self.path, root)
+    def make_absolute(self, root: Path) -> "Filter":
+        return FilterIsInPath(_make_absolute(self.path, root))
 
     def negate(self) -> Filter:
         return FilterIsNotInPath(self.path)
@@ -180,8 +180,8 @@ class FilterIsNotInPath(Filter):
             # b/c we returned include_children=False above
             return True
 
-    def make_absolute(self, root: Path) -> None:
-        self.path = _make_absolute(self.path, root)
+    def make_absolute(self, root: Path) -> "Filter":
+        return FilterIsNotInPath(_make_absolute(self.path, root))
 
     def __str__(self) -> str:
         return f"is not in {self.path!r}"
@@ -292,8 +292,8 @@ class FilterExclude(Filter):
             # b/c we returned include_children=False above
             return True
 
-    def make_absolute(self, root: Path) -> None:
-        self.path = _make_absolute(self.path, root)
+    def make_absolute(self, root: Path) -> "Filter":
+        return FilterExclude(_make_absolute(self.path, root))
 
     def __str__(self) -> str:
         return f"exclude {self.path!r}"

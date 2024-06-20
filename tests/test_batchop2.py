@@ -73,3 +73,25 @@ class TestBatchOp2(BaseTmpDir):
 
         self.assertEqual(undo_result.num_ops, 2)
         self.assertEqual(bop.count(filterset), original_count)
+        self.assert_unchanged()
+
+    def test_move(self):
+        bop = BatchOp2(self.tmpdirpath)
+        filterset = FilterSet3().is_like("*-ch*.txt")
+        self.assertEqual(bop.count(filterset.is_in("chapters")), 0)
+
+        move_result = bop.move(filterset, "chapters", require_confirm=False)
+
+        self.assertEqual(
+            self._make_relative_and_sort(move_result.paths_moved),
+            [
+                "pride-and-prejudice/pride-and-prejudice-ch1.txt",
+                "pride-and-prejudice/pride-and-prejudice-ch2.txt",
+            ],
+        )
+        self.assertEqual(bop.count(filterset.is_in("chapters")), 2)
+
+        bop.undo(require_confirm=False)
+
+        self.assertEqual(bop.count(filterset.is_in("chapters")), 0)
+        self.assert_unchanged()
