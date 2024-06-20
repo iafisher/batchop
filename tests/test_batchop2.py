@@ -95,3 +95,24 @@ class TestBatchOp2(BaseTmpDir):
 
         self.assertEqual(bop.count(filterset.is_in("chapters")), 0)
         self.assert_unchanged()
+
+    def test_rename(self):
+        # rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt
+        bop = BatchOp2(self.tmpdirpath)
+
+        rename_result = bop.rename(
+            FilterSet3(),
+            "pride-and-prejudice-ch*.txt",
+            "ch#1.txt",
+            require_confirm=False,
+        )
+
+        self.assert_file_set_equals(
+            bop.list(FilterSet3().is_in("pride-and-prejudice")),
+            ["pride-and-prejudice/ch1.txt", "pride-and-prejudice/ch2.txt"],
+        )
+        self.assertEqual(len(rename_result.paths_renamed), 2)
+
+        bop.undo(require_confirm=False)
+
+        self.assert_unchanged()

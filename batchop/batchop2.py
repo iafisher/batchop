@@ -1,10 +1,11 @@
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from . import confirmation, english, exceptions
+from . import confirmation, english, exceptions, globreplace
 from .common import AbsolutePath, PathLike, abspath
 from .db import (
     INVOCATION_CONTEXT_PYTHON,
@@ -29,6 +30,11 @@ class DeleteResult:
 class MoveResult:
     paths_moved: List[AbsolutePath]
     destination: AbsolutePath
+
+
+@dataclass
+class RenameResult:
+    paths_renamed: Dict[AbsolutePath, str]
 
 
 @dataclass
@@ -91,6 +97,9 @@ class BatchOp2:
 
         return DeleteResult(paths_deleted)
 
+    def list(self, filterset: FilterSet3) -> List[AbsolutePath]:
+        return list(filterset.resolve(self.root, recursive=False))
+
     def move(
         self,
         filterset: FilterSet3,
@@ -128,6 +137,46 @@ class BatchOp2:
                 shutil.move(p, destination)
 
         return MoveResult(paths_moved, destination)
+
+    def rename(
+        self,
+        filterset: FilterSet3,
+        old: str,
+        new: str,
+        *,
+        require_confirm: bool = True,
+        dry_run: bool = False,
+        original_cmdline: str = "",
+    ) -> Optional[RenameResult]:
+        pattern = re.compile(globreplace.glob_to_regex(old))
+        repl = globreplace.glob_to_regex_repl(new)
+
+        fileset = filterset.resolve(self.root, recursive=False)
+        if fileset.is_empty():
+            raise exceptions.EmptyFileSet
+
+        if require_confirm:
+            if not confirmation.confirm_operation_on_fileset2(fileset, "Rename"):
+                return None
+
+        paths_renamed = {}
+        for p in fileset:
+            new_name = pattern.sub(repl, p.name)
+            if new_name == p.name:
+                continue
+
+            paths_renamed[p] = new_name
+
+        if not dry_run:
+            # TODO: detect name collisions before starting
+            undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
+            for p, new_name in paths_renamed.items():
+                new_path = p.parent / new_name
+                undo_mgr.add_op(OP_TYPE_RENAME, p, new_path)
+                # TODO: don't overwrite existing
+                shutil.move(p, new_path)
+
+        return RenameResult(paths_renamed)
 
     # TODO: should this take an explicit undo ID?
     def undo(self, *, require_confirm: bool = True) -> Optional[UndoResult]:
