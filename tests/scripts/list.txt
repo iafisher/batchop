@@ -1,41 +1,41 @@
-> list folders
+> ls folders
 empty_dir
 misc
 pride-and-prejudice
 
-> list dirs that are not empty
+> ls dirs that are not empty
 misc
 pride-and-prejudice
 
-> list files in pride-and-prejudice
+> ls files in pride-and-prejudice
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt
 
-> list files gt 20kb
+> ls files gt 20kb
 constitution.txt
 
-> list files lt 1kb
+> ls files lt 1kb
 empty_file.txt
 misc/empty_file.txt
 
-> list files with ext txt
+> ls files with ext txt
 constitution.txt
-empty_file.txt
-misc/empty_file.txt
-pride-and-prejudice/pride-and-prejudice-ch1.txt
-pride-and-prejudice/pride-and-prejudice-ch2.txt
-
-> list files with ext txt exclude pride-and-prejudice/
-constitution.txt
-empty_file.txt
-misc/empty_file.txt
-
-> list files with ext txt in . exclude constitution.txt
 empty_file.txt
 misc/empty_file.txt
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt
 
-> list 'p*ch?.txt'
+> ls files with ext txt exclude pride-and-prejudice/
+constitution.txt
+empty_file.txt
+misc/empty_file.txt
+
+> ls files with ext txt in . exclude constitution.txt
+empty_file.txt
+misc/empty_file.txt
+pride-and-prejudice/pride-and-prejudice-ch1.txt
+pride-and-prejudice/pride-and-prejudice-ch2.txt
+
+> ls 'p*ch?.txt'
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt

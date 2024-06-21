@@ -1,16 +1,21 @@
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Union
 
 from . import colors, exceptions, parsing, __version__
 from .batchop import BatchOp
-from .common import PathLike, err_and_bail, plural
+from .common import err_and_bail, plural
 from .db import INVOCATION_CONTEXT_CLI
 from .fileset import FileSet, FilterSet
 
 
 def main() -> None:
+    _main(sys.argv[1:])
+
+
+def _main(argv: List[str]) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
     parser.add_argument(
@@ -23,110 +28,183 @@ def main() -> None:
         action="store_true",
         help="Execute the command without confirmation. Not recommended.",
     )
+    # TODO: this is currently ignored and should probably be removed
     parser.add_argument(
         "--special-files",
         action="store_true",
         help="Include files that are neither regular files nor directories. This is rarely desirable.",
     )
-    parser.add_argument("words", nargs="*")
+    parser.add_argument("--sort", action="store_true")
+    parser.add_argument("--context", default=INVOCATION_CONTEXT_CLI)
     parser.add_argument("--version", action="version", version=__version__)
-    args = parser.parse_args()
+
+    subparsers = parser.add_subparsers()
+
+    parser_count = add_subparser(subparsers, "count")
+    parser_count.add_argument("words", nargs="+")
+
+    parser_ls = add_subparser(subparsers, "ls")
+    parser_ls.add_argument("words", nargs="+")
+
+    parser_mv = add_subparser(subparsers, "mv")
+    parser_mv.add_argument("files", nargs="*")
+    parser_mv.add_argument("-q", "--query")
+    parser_mv.add_argument("-t", "--to", required=True)
+
+    parser_rename = add_subparser(subparsers, "rename")
+    parser_rename.add_argument("old", help="glob pattern to match")
+    parser_rename.add_argument("-t", "--to", help="pattern to substitute")
+
+    add_subparser(subparsers, "repl")
+
+    parser_rm = add_subparser(subparsers, "rm")
+    parser_rm.add_argument("files", nargs="*")
+    parser_rm.add_argument("-q", "--query")
+
+    add_subparser(subparsers, "undo")
+
+    args = parser.parse_args(argv)
+
+    if args.directory:
+        os.chdir(args.directory)
+
+    root = Path(".").absolute()
+    require_confirm = not args.no_confirm
 
     try:
-        if len(args.words) > 0:
-            words = args.words[0] if len(args.words) == 1 else args.words
-            main_execute(
-                words,
-                directory=args.directory,
+        bop = BatchOp(root, context=args.context)
+        if args.subcommand == "count":
+            main_count(bop, args.words)
+        elif args.subcommand == "ls":
+            main_ls(bop, args.words, sort=args.sort)
+        elif args.subcommand == "mv":
+            main_mv(
+                bop,
+                args.files,
+                args.to,
+                query=args.query,
+                require_confirm=require_confirm,
                 dry_run=args.dry_run,
-                require_confirm=not args.no_confirm,
-                special_files=args.special_files,
             )
+        elif args.subcommand == "rename":
+            main_rename(
+                bop,
+                args.old,
+                args.to,
+                require_confirm=require_confirm,
+                dry_run=args.dry_run,
+            )
+        elif args.subcommand == "repl":
+            main_repl(dry_run=args.dry_run)
+        elif args.subcommand == "rm":
+            main_rm(
+                bop,
+                args.files,
+                query=args.query,
+                require_confirm=require_confirm,
+                dry_run=args.dry_run,
+            )
+        elif args.subcommand == "undo":
+            # TODO: dry_run?
+            main_undo(bop, require_confirm=require_confirm)
         else:
-            main_interactive(
-                args.directory, dry_run=args.dry_run, special_files=args.special_files
-            )
+            raise exceptions.Impossible
     except exceptions.Base as e:
         err_and_bail(e.fancy())
 
 
-def main_execute(
-    words: Union[str, List[str]],
+def add_subparser(subparsers, name):
+    p = subparsers.add_parser(name)
+    p.set_defaults(subcommand=name)
+    return p
+
+
+def main_count(bop: BatchOp, words: List[str]) -> None:
+    filterset = parsing.parse_query(" ".join(words))
+    print(bop.count(filterset))
+
+
+def main_ls(bop: BatchOp, words: List[str], *, sort: bool = False) -> None:
+    filterset = parsing.parse_query(" ".join(words))
+
+    paths = bop.list(filterset)
+    if sort:
+        paths.sort()
+
+    for p in paths:
+        print(p.relative_to(bop.root))
+
+
+def main_mv(
+    bop: BatchOp,
+    files: List[str],
+    destination: str,
     *,
-    directory: Optional[str],
+    query: str = "",
     require_confirm: bool,
-    dry_run: bool = False,
-    special_files: bool = False,
-    context: str = INVOCATION_CONTEXT_CLI,
-    sort_output: bool = False,
+    dry_run: bool,
 ) -> None:
-    if directory is not None:
-        os.chdir(directory)
+    filterset = _check_files_and_query(files, query)
 
-    root = Path(".").absolute()
-    original_cmdline = words if isinstance(words, str) else " ".join(words)
-    parsed_cmd = parsing.parse_command(words)
-
-    bop = BatchOp(context=context)
-    if isinstance(parsed_cmd, parsing.UnaryCommand):
-        filterset = FilterSet(parsed_cmd.filters, special_files=special_files)
-        # filterset.optimize()
-        if parsed_cmd.command == "delete":
-            bop.delete(
-                filterset,
-                dry_run=dry_run,
-                require_confirm=require_confirm,
-                original_cmdline=original_cmdline,
-            )
-        elif parsed_cmd.command == "list":
-            it: Iterable[Path] = bop.list(filterset)
-            if sort_output:
-                it = sorted(it)
-
-            for p in it:
-                print(p.relative_to(root))
-        elif parsed_cmd.command == "count":
-            n = bop.count(filterset)
-            print(n)
-        else:
-            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
-    elif isinstance(parsed_cmd, parsing.SpecialCommand):
-        if parsed_cmd.command == "undo":
-            bop.undo(require_confirm=require_confirm)
-        else:
-            raise exceptions.SyntaxUnknownCommand(parsed_cmd.command)
-    elif isinstance(parsed_cmd, parsing.RenameCommand):
-        filterset = FilterSet(special_files=special_files)
-        # filterset.optimize()
-        bop.rename(
-            filterset,
-            parsed_cmd.old,
-            parsed_cmd.new,
-            dry_run=dry_run,
-            require_confirm=require_confirm,
-            original_cmdline=original_cmdline,
-        )
-    elif isinstance(parsed_cmd, parsing.MoveCommand):
-        filterset = FilterSet(parsed_cmd.filters, special_files=special_files)
-        # filterset.optimize()
-        bop.move(
-            filterset,
-            parsed_cmd.destination,
-            dry_run=dry_run,
-            require_confirm=require_confirm,
-            original_cmdline=original_cmdline,
-        )
+    if query:
+        original_cmdline = f"mv {query}"
     else:
-        raise exceptions.Impossible
+        # TODO: quote?
+        original_cmdline = f"mv {' '.join(files)}"
+
+    bop.move(
+        filterset,
+        destination,
+        require_confirm=require_confirm,
+        dry_run=dry_run,
+        original_cmdline=original_cmdline,
+    )
 
 
-def main_interactive(
-    d: Optional[str], *, dry_run: bool = False, special_files: bool = False
+def main_rename(
+    bop: BatchOp, old: str, new: str, *, require_confirm: bool, dry_run: bool
 ) -> None:
+    # TODO: quote?
+    original_cmdline = f"rename {old!r} {new!r}"
+    # TODO: FilterSet() is inefficient, should constrain based on `old` pattern
+    bop.rename(
+        FilterSet(),
+        old,
+        new,
+        require_confirm=require_confirm,
+        dry_run=dry_run,
+        original_cmdline=original_cmdline,
+    )
+
+
+def main_rm(
+    bop: BatchOp, files: List[str], *, query: str, require_confirm: bool, dry_run: bool
+) -> None:
+    filterset = _check_files_and_query(files, query)
+
+    if query:
+        original_cmdline = f"rm {query!r}"
+    else:
+        # TODO: quote?
+        original_cmdline = f"rm {' '.join(files)}"
+
+    bop.delete(
+        filterset,
+        require_confirm=require_confirm,
+        dry_run=dry_run,
+        original_cmdline=original_cmdline,
+    )
+
+
+def main_undo(bop: BatchOp, *, require_confirm: bool) -> None:
+    bop.undo(require_confirm=require_confirm)
+
+
+def main_repl(*, dry_run: bool = False) -> None:
     import readline
 
-    root = path_or_default(d).absolute()
-    filterset = FilterSet(special_files=special_files).is_not_hidden()
+    root = Path(".").absolute()
+    filterset = FilterSet().is_not_hidden()
 
     if len(filterset.get_filters()) > 0:
         print("Filters applied by default: ")
@@ -201,12 +279,14 @@ def main_interactive(
         recalculate = True
 
 
-def path_or_default(p: Optional[PathLike]) -> Path:
-    if p is None:
-        r = Path(".")
-    elif isinstance(p, Path):
-        r = p
-    else:
-        r = Path(p)
+def _check_files_and_query(files: List[str], query: str) -> FilterSet:
+    # TODO: better error messages
+    if files and query:
+        err_and_bail("both files and query (-q) cannot be provided")
 
-    return r
+    if files:
+        return FilterSet().is_exactly(files)
+    elif query:
+        return parsing.parse_query(query)
+    else:
+        err_and_bail("either files or query (-q) must be provided")

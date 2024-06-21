@@ -1,4 +1,5 @@
 import os
+import shlex
 import shutil
 import tempfile
 import unittest
@@ -7,7 +8,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from batchop.main import main_execute
+from batchop.batchop import BatchOp
+from batchop.main import _main
 
 
 class BaseTmpDir(unittest.TestCase):
@@ -21,6 +23,8 @@ class BaseTmpDir(unittest.TestCase):
         os.mkdir(os.path.join(self.tmpdirpath, "empty_dir"))
 
         self._original_tree = self._list_files()
+        self.context = uuid.uuid4().hex
+        self.bop = BatchOp(self.tmpdirpath, context=self.context)
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -52,12 +56,17 @@ class BaseTmpDir(unittest.TestCase):
         context = uuid.uuid4().hex
         for cmd, output_lines in self.read_script(name):
             with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-                main_execute(
-                    cmd,
-                    directory=self.tmpdirpath,
-                    require_confirm=False,
-                    context=context,
-                    sort_output=True,
+                words = shlex.split(cmd)
+                _main(
+                    [
+                        "-d",
+                        self.tmpdirpath,
+                        "--no-confirm",
+                        "--context",
+                        context,
+                        "--sort",
+                    ]
+                    + words
                 )
 
             self.assertEqual(

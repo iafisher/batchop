@@ -1,11 +1,11 @@
-> list files in pride-and-prejudice
+> ls files in pride-and-prejudice
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt
-> rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt
-> list files in pride-and-prejudice
+> rename 'pride-and-prejudice-ch*.txt' -t 'ch#1.txt'
+> ls files in pride-and-prejudice
 pride-and-prejudice/ch1.txt
 pride-and-prejudice/ch2.txt
 > undo
-> list files in pride-and-prejudice
+> ls files in pride-and-prejudice
 pride-and-prejudice/pride-and-prejudice-ch1.txt
 pride-and-prejudice/pride-and-prejudice-ch2.txt

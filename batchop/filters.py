@@ -3,7 +3,7 @@ import fnmatch
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 from . import exceptions
 
@@ -96,6 +96,7 @@ class FilterIsEmpty(Filter):
         if p.is_dir():
             return not any(p.iterdir())
         else:
+            # TODO: handle stat() exception
             return p.stat().st_size == 0
 
     def __str__(self) -> str:
@@ -103,17 +104,17 @@ class FilterIsEmpty(Filter):
 
 
 @dataclass
-class FilterIs(Filter):
-    path: Path
+class FilterIsExactly(Filter):
+    paths: List[Path]
 
     def test(self, p: Path) -> Result:
-        return self.path == p
+        return p in self.paths
 
     def make_absolute(self, root: Path) -> "Filter":
-        return FilterIs(_make_absolute(self.path, root))
+        return FilterIsExactly([_make_absolute(p, root) for p in self.paths])
 
     def __str__(self) -> str:
-        return f"is {self.path}"
+        return f"is exactly: {' '.join(map(repr, self.paths))}"
 
 
 @dataclass
@@ -315,7 +316,7 @@ def pattern_to_filter(s: str) -> Filter:
     elif "*" in s or "?" in s or "[" in s:
         return glob_pattern_to_filter(s)
     else:
-        return FilterIs(Path(s))
+        return FilterIsExactly([Path(s)])
 
 
 def _make_absolute(p: Path, root: Path) -> Path:

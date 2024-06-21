@@ -41,7 +41,8 @@
 - transactional semantics – roll back operations that have already been completed?
 - `.batchop/backup` should have a directory per invocation, and maybe use original file names unless there would be a
   collision?
-- `delete a/b exclude a/b/c` should be reject as we can't delete `a/b` without also deleting `a/b/c`
+- `delete a/b exclude a/b/c` should be rejected as we can't delete `a/b` without also deleting `a/b/c`
+- could optimize `.stat()` usage, calling it multiple times on the same path
 
 ## More filters
 

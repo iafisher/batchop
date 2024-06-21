@@ -1,7 +1,7 @@
 from batchop import exceptions
 from batchop.batchop import BatchOp
 from batchop.fileset import FilterSet
-from batchop.main import main_execute
+from batchop.main import main_mv
 
 from common import BaseTmpDir
 
@@ -42,11 +42,16 @@ class TestMoveCommand(BaseTmpDir):
 
     def test_move_files_collision(self):
         with self.assertRaises(exceptions.PathCollision):
-            main_execute(
-                "move 'empty*.txt' to whatever",
-                directory=self.tmpdirpath,
+            main_mv(
+                self.bop,
+                [],
+                "whatever",
+                query="empty*.txt",
                 require_confirm=False,
+                dry_run=False,
             )
+
+        self.assert_unchanged()
 
     def test_move_api(self):
         bop = BatchOp(self.tmpdirpath)

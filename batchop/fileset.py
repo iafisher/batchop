@@ -8,6 +8,7 @@ from typing import Iterator, List, Optional, Tuple
 from . import exceptions, filters
 from .common import (
     AbsolutePath,
+    ListPathLike,
     NumberLike,
     PathLike,
     PatternLike,
@@ -87,6 +88,11 @@ class FilterSet:
 
     def resolve(self, root_like: PathLike, *, recursive: bool) -> FileSet:
         root = abspath(root_like)
+        for f in self._filters:
+            if isinstance(f, filters.FilterIsExactly):
+                f = f.make_absolute(root)
+                return self._resolve_exact(f.paths)  # type: ignore
+
         _filters = [f.make_absolute(root) for f in self._filters]
         if not self.special_files:
             _filters.insert(0, filters.FilterIsSpecial().negate())
@@ -126,6 +132,23 @@ class FilterSet:
 
         return FileSet(r)
 
+    def _resolve_exact(self, paths: List[AbsolutePath]) -> FileSet:
+        items = []
+        for p in paths:
+            if not p.exists():
+                raise exceptions.FileNotFound(p)
+
+            # TODO: handle stat() exception
+            items.append(
+                FileSetItem(
+                    p,
+                    is_dir=p.is_dir(),
+                    is_root=True,
+                    size_bytes=p.stat().st_size,
+                )
+            )
+        return FileSet(items)
+
     @staticmethod
     def _test(_filters: List[filters.Filter], item: Path) -> Tuple[bool, bool]:
         # TODO: terminate filter application early if possible
@@ -145,6 +168,10 @@ class FilterSet:
 
     def is_not_empty(self) -> "FilterSet":
         return self.copy_with(filters.FilterIsEmpty().negate())
+
+    def is_exactly(self, path_likes: ListPathLike) -> "FilterSet":
+        paths = [Path(p) for p in path_likes]
+        return self.copy_with(filters.FilterIsExactly(paths))
 
     def is_like(self, pattern: str) -> "FilterSet":
         return self.copy_with(filters.glob_pattern_to_filter(pattern))

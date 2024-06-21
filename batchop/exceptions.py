@@ -109,6 +109,17 @@ class EmptyFileSet(Base):
         return "the file set is empty (are your filters too restrictive?)"
 
 
+class FileNotFound(Base):
+    path: Path
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self.path = path
+
+    def fancy(self) -> str:
+        return f"the file {self.path} does not exist"
+
+
 # not a subclass of BatchOpError as it should not be caught
 class Impossible(Exception):
     pass

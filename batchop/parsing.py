@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, List, NoReturn, Optional, Tuple, Union
 
 from . import exceptions, filters
+from .fileset import FilterSet
 from .filters import Filter
 from .patterns import PATTERNS, BasePattern
 
@@ -31,6 +32,16 @@ class MoveCommand:
 
 
 ParsedCommand = Union[UnaryCommand, SpecialCommand, MoveCommand, RenameCommand]
+
+
+def parse_query(text: str) -> FilterSet:
+    tokens = tokenize(text)
+
+    if len(tokens) == 0:
+        raise exceptions.SyntaxEmptyInput
+
+    filters_ = parse_np_and_preds(tokens)
+    return FilterSet(filters_)
 
 
 def parse_command(words: Union[str, List[str]]) -> ParsedCommand:

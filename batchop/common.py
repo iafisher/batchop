@@ -2,12 +2,13 @@ import decimal
 import re
 import sys
 from pathlib import Path
-from typing import Any, NewType, NoReturn, Optional, Union
+from typing import Any, List, NewType, NoReturn, Optional, Union
 
 from . import colors
 
 
 PathLike = Union[str, Path]
+ListPathLike = Union[List[str], List[Path]]
 NumberLike = Union[int, float, decimal.Decimal, str]
 PatternLike = Union[str, re.Pattern]
 
