@@ -21,4 +21,20 @@ def code(x: Any) -> str:
 
 
 def _raw(code: int) -> str:
+    if not _ENABLED:
+        return ""
+
     return f"\033[{code}m"
+
+
+_ENABLED = True
+
+
+def enable() -> None:
+    global _ENABLED
+    _ENABLED = True
+
+
+def disable() -> None:
+    global _ENABLED
+    _ENABLED = False

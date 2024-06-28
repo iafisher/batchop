@@ -1,7 +1,5 @@
 ## Bugs
 
-- `delete X` is very slow in `~/Code` directory because it queries the entire directory instead of
-  just X
 - need to handle PermissionError gracefully -- how?
 - "10 mb" doesn't parse, have to write it as one word: "10mb"
 
@@ -14,8 +12,6 @@
         - tricky because undoing old old commands may not work
     - does stacked undo work?
     - detect changes in directory and require confirmation if so
-- `move` command
-    - `move <fileset> to <dest>`
 - `replace` command
     - `replace "foo" with "bar" in <fileset>`
 - shortcut for single replacement: `rename "*.md" to "*.mdx"` instead of `rename "*.md" to "#1.mdx"`
@@ -37,12 +33,12 @@
     - put most restrictive filters first
     - remove duplicates
 - handle non-UTF8 file names
-- respect `NO_COLOR`
 - transactional semantics – roll back operations that have already been completed?
 - `.batchop/backup` should have a directory per invocation, and maybe use original file names unless there would be a
   collision?
 - `delete a/b exclude a/b/c` should be rejected as we can't delete `a/b` without also deleting `a/b/c`
 - could optimize `.stat()` usage, calling it multiple times on the same path
+- custom help text
 
 ## More filters
 
@@ -71,6 +67,7 @@
     - Idea: if contains a slash, always interpreted as a path; otherwise interpreted as a name
 - Should hidden files include `.a/b` or only `.b`?
     - i.e., is a file hidden if in a hidden directory, or only if itself hidden?
+    - What if we are inside a hidden directory?
 
 ## Ideas
 

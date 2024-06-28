@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Union
+from typing import List
 
 from . import colors, exceptions, parsing, __version__
 from .batchop import BatchOp
@@ -27,6 +27,9 @@ def _main(argv: List[str]) -> None:
         "--no-confirm",
         action="store_true",
         help="Execute the command without confirmation. Not recommended.",
+    )
+    parser.add_argument(
+        "--no-color", action="store_true", help="Turn off colored output."
     )
     # TODO: this is currently ignored and should probably be removed
     parser.add_argument(
@@ -70,6 +73,14 @@ def _main(argv: List[str]) -> None:
 
     root = Path(".").absolute()
     require_confirm = not args.no_confirm
+
+    if not hasattr(args, "subcommand"):
+        parser.print_help()
+        return
+
+    # https://no-color.org/
+    if args.no_color or os.environ.get("NO_COLOR"):
+        colors.disable()
 
     try:
         bop = BatchOp(root, context=args.context)
