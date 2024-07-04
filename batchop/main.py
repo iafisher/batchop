@@ -46,7 +46,7 @@ def _main(argv: List[str]) -> None:
     parser_mv = add_subparser(subparsers, "mv")
     parser_mv.add_argument("files", nargs="*")
     parser_mv.add_argument("-q", "--query")
-    parser_mv.add_argument("-t", "--to", required=True)
+    parser_mv.add_argument("-t", "--to")
 
     parser_rename = add_subparser(subparsers, "rename")
     parser_rename.add_argument("old", help="glob pattern to match")
@@ -83,10 +83,18 @@ def _main(argv: List[str]) -> None:
         elif args.subcommand == "ls":
             main_ls(bop, args.words, sort=args.sort)
         elif args.subcommand == "mv":
+            if args.to:
+                destination = args.to
+            else:
+                if len(args.files) < 2:
+                    err_and_bail("no destination specified for 'mv' command")
+
+                destination = args.files.pop()
+
             main_mv(
                 bop,
                 args.files,
-                args.to,
+                destination,
                 query=args.query,
                 require_confirm=require_confirm,
                 dry_run=args.dry_run,

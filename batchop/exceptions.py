@@ -120,6 +120,17 @@ class FileNotFound(Base):
         return f"the file {self.path} does not exist"
 
 
+class NotADirectory(Base):
+    path: Path
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self.path = path
+
+    def fancy(self) -> str:
+        return f"{self.path} is not a directory"
+
+
 # not a subclass of BatchOpError as it should not be caught
 class Impossible(Exception):
     pass

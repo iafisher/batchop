@@ -110,6 +110,8 @@ class BatchOp:
         original_cmdline: str = "",
     ) -> Optional[MoveResult]:
         destination = abspath(destination_like, root=self.root)
+        if destination.exists() and not destination.is_dir():
+            raise exceptions.NotADirectory(destination)
 
         fileset = filterset.resolve(self.root, recursive=True)
         if fileset.is_empty():
