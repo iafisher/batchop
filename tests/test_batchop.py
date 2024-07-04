@@ -81,12 +81,23 @@ class TestRenameCommand(BaseTmpDir):
     def test_rename_script(self):
         self.run_script("rename.txt")
 
+    def test_rename_files_collision(self):
+        bop = BatchOp(self.tmpdirpath)
+
+        with self.assertRaises(exceptions.PathCollision):
+            bop.rename(
+                "pride-and-prejudice-ch*.txt",
+                "a.txt",
+                require_confirm=False,
+            )
+
+        self.assert_unchanged()
+
     def test_rename_api(self):
         # rename 'pride-and-prejudice-ch*.txt' to 'ch#1.txt
         bop = BatchOp(self.tmpdirpath)
 
         rename_result = bop.rename(
-            FilterSet(),
             "pride-and-prejudice-ch*.txt",
             "ch#1.txt",
             require_confirm=False,

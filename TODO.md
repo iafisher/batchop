@@ -50,7 +50,6 @@
 ## Cleanup/testing
 
 - inject synthetic errors to test error handling in middle of operation
-- get rid of `cwd` parameters in parser
 
 ## Questions
 
@@ -78,17 +77,3 @@
     - For output: should be relative
     - For undo: *must* be absolute
     - Command-line tool can assume that root == cwd, but Python API can't
-- Distinction between lazy and concrete filesets
-    - lazy is defined by a set of filters and can be recalculated/modified
-    - concrete is a concrete list of files
-    - once lazy is resolved, it turns into concrete and no longer need to recalculate filters/size
-    - this could have weird interactions with recurse behavior... or maybe not
-- Imperative commands (`move`, `rename`, `delete`) have normal Unix syntax
-    - batchop remembers last `list` command and saves fileset as special value `_` which can be referenced in later
-      commands, e.g. `bop list files gt 10 mb; bop delete _`
-    - Drawbacks
-        - Interference between batchop sessions in different terminals
-        - Less convenient than being able to specify filters in-line
-            - however avoids weird things like `bop delete '*.txt'` having different behavior than `bop delete *.txt`
-    - Rename `list` to `find`? `query`? `q`?
-- Decouple 'FilterSet' from 'FileSet'?

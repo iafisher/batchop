@@ -127,7 +127,6 @@ class BatchOp:
         if not dry_run:
             undo_mgr = UndoManager.start(self.db, self.backup_dir(), original_cmdline)
             # TODO: add to confirmation message if destination will be created
-            # TODO: register with undo manager
             # it is important to do this AFTER calling `fileset.resolve()` as otherwise the destination directory could
             # be picked up as a source
             undo_mgr.add_op(OP_TYPE_CREATE, None, destination)
@@ -142,14 +141,20 @@ class BatchOp:
 
     def rename(
         self,
-        filterset: FilterSet,
         old: str,
         new: str,
         *,
+        filterset_opt: Optional[FilterSet] = None,
         require_confirm: bool = True,
         dry_run: bool = False,
         original_cmdline: str = "",
     ) -> Optional[RenameResult]:
+        if filterset_opt is None:
+            # TODO: FilterSet() is inefficient, should constrain based on `old` pattern
+            filterset = FilterSet()
+        else:
+            filterset = filterset_opt
+
         pattern = re.compile(globreplace.glob_to_regex(old))
         repl = globreplace.glob_to_regex_repl(new)
 
@@ -161,13 +166,15 @@ class BatchOp:
             if not confirmation.confirm_operation_on_fileset(fileset, "Rename"):
                 return None
 
-        paths_renamed = {}
+        paths_renamed: Dict[AbsolutePath, str] = {}
         for p in fileset:
             new_name = pattern.sub(repl, p.name)
             if new_name == p.name:
                 continue
 
             paths_renamed[p] = new_name
+
+        _detect_name_collisions(paths_renamed)
 
         if not dry_run:
             # TODO: detect name collisions before starting
@@ -245,7 +252,6 @@ class BatchOp:
     def _undo_rename_or_move(self, op: InvocationOp) -> None:
         if op.path_after.exists():
             # TODO: check for collision?
-            # TODO: cross-platform
             shutil.move(op.path_after, op.path_before)
 
     def _undo_create(self, op: InvocationOp) -> None:
@@ -315,6 +321,17 @@ class UndoManager:
         r = self.backup_directory / f"{self.invocation_id}___{self.i:0>8}"
         self.i += 1
         return r
+
+
+def _detect_name_collisions(paths_renamed: Dict[AbsolutePath, str]) -> None:
+    # new path --> old path
+    already_seen: Dict[Path, Path] = {}
+    for old_path, new_name in paths_renamed.items():
+        new_path = old_path.parent / new_name
+        if new_path in already_seen:
+            raise exceptions.PathCollision(path1=old_path, path2=already_seen[new_path])
+
+        already_seen[new_path] = old_path
 
 
 def _detect_duplicates(fileset: FileSet) -> None:

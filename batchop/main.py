@@ -1,5 +1,6 @@
 import argparse
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import List
@@ -160,10 +161,9 @@ def main_mv(
     filterset = _check_files_and_query(files, query)
 
     if query:
-        original_cmdline = f"mv {query}"
+        original_cmdline = f"mv {shlex.quote(query)}"
     else:
-        # TODO: quote?
-        original_cmdline = f"mv {' '.join(files)}"
+        original_cmdline = f"mv {' '.join(map(shlex.quote, files))}"
 
     bop.move(
         filterset,
@@ -177,11 +177,8 @@ def main_mv(
 def main_rename(
     bop: BatchOp, old: str, new: str, *, require_confirm: bool, dry_run: bool
 ) -> None:
-    # TODO: quote?
-    original_cmdline = f"rename {old!r} {new!r}"
-    # TODO: FilterSet() is inefficient, should constrain based on `old` pattern
+    original_cmdline = f"rename {shlex.quote(old)} {shlex.quote(new)}"
     bop.rename(
-        FilterSet(),
         old,
         new,
         require_confirm=require_confirm,
@@ -196,10 +193,9 @@ def main_rm(
     filterset = _check_files_and_query(files, query)
 
     if query:
-        original_cmdline = f"rm {query!r}"
+        original_cmdline = f"rm {shlex.quote(query)}"
     else:
-        # TODO: quote?
-        original_cmdline = f"rm {' '.join(files)}"
+        original_cmdline = f"rm {' '.join(map(shlex.quote, files))}"
 
     bop.delete(
         filterset,
