@@ -31,12 +31,6 @@ def _main(argv: List[str]) -> None:
     parser.add_argument(
         "--no-color", action="store_true", help="Turn off colored output."
     )
-    # TODO: this is currently ignored and should probably be removed
-    parser.add_argument(
-        "--special-files",
-        action="store_true",
-        help="Include files that are neither regular files nor directories. This is rarely desirable.",
-    )
     parser.add_argument("--sort", action="store_true")
     parser.add_argument("--context", default=INVOCATION_CONTEXT_CLI)
     parser.add_argument("--version", action="version", version=__version__)

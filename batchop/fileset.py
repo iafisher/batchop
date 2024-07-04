@@ -59,17 +59,10 @@ class FileSet:
 
 class FilterSet:
     _filters: List[filters.Filter]
-    special_files: bool
 
     # TODO: should this take a `root` parameter here or in `resolve`?
-    def __init__(
-        self,
-        _filters: Optional[List[filters.Filter]] = None,
-        *,
-        special_files: bool = False
-    ) -> None:
+    def __init__(self, _filters: Optional[List[filters.Filter]] = None) -> None:
         self._filters = _filters or []
-        self.special_files = special_files
 
     def pop(self) -> None:
         self._filters.pop()
@@ -94,8 +87,6 @@ class FilterSet:
                 return self._resolve_exact(f.paths)  # type: ignore
 
         _filters = [f.make_absolute(root) for f in self._filters]
-        if not self.special_files:
-            _filters.insert(0, filters.FilterIsSpecial().negate())
 
         r = []
         # TODO: does this give a reasonable iteration order?
