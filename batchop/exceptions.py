@@ -13,7 +13,7 @@ class Syntax(Base):
 
 class SyntaxEndOfInput(Syntax):
     def fancy(self) -> str:
-        return f"the command ended when more words were still expected"
+        return "the command ended when more words were still expected"
 
 
 class SyntaxExtraInput(Syntax):

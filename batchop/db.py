@@ -90,7 +90,7 @@ class Database:
     def create_invocation(self, cmdline: str, *, undoable: bool) -> InvocationId:
         time_invoked_ms = int(time.time() * 1000)
         invocation_id = uuid.uuid4().hex
-        cursor = self.conn.execute(
+        self.conn.execute(
             f"""
             INSERT INTO invocation({_INVOCATION_FIELDS})
             VALUES (?, ?, ?, ?, ?)

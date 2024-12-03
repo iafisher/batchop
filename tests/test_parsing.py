@@ -1,10 +1,4 @@
-import os
-import re
-import shutil
-import tempfile
 import unittest
-import uuid
-from pathlib import Path
 from typing import Any, List, Optional
 
 from batchop import filters, patterns
@@ -21,8 +15,6 @@ from batchop.parsing import (
 
 class TestCommandParsing(unittest.TestCase):
     def test_delete_command(self):
-        cwd = Path(".")
-
         cmd = parse_command("delete everything")
         self.assertEqual(cmd, UnaryCommand("delete", []))
 
@@ -33,8 +25,6 @@ class TestCommandParsing(unittest.TestCase):
         self.assertEqual(cmd, UnaryCommand("delete", [filters.FilterIsDirectory()]))
 
     def test_list_command(self):
-        cwd = Path(".")
-
         cmd = parse_command("list all empty files")
         self.assertEqual(
             cmd,
@@ -45,14 +35,10 @@ class TestCommandParsing(unittest.TestCase):
         )
 
     def test_rename_command(self):
-        cwd = Path(".")
-
         cmd = parse_command("rename '*.md' to '#1.md'")
         self.assertEqual(cmd, RenameCommand("*.md", "#1.md"))
 
     def test_move_command(self):
-        cwd = Path(".")
-
         cmd = parse_command("move '*-ch*.txt' to books/austen")
         self.assertEqual(
             cmd,

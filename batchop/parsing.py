@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, List, NoReturn, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from . import exceptions, filters
 from .fileset import FilterSet

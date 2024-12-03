@@ -203,7 +203,7 @@ class BatchOp:
             if invocation.cmdline:
                 raise exceptions.Base(f"{the_last_command} was not undo-able")
             else:
-                raise exceptions.Base(f"the last command was not undo-able")
+                raise exceptions.Base("the last command was not undo-able")
         if len(invocation_ops) == 0:
             # TODO: is this case ever possible?
             raise exceptions.Base(

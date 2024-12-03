@@ -210,7 +210,7 @@ def main_undo(bop: BatchOp, *, require_confirm: bool) -> None:
 
 
 def main_repl(*, dry_run: bool = False) -> None:
-    import readline
+    import readline  # noqa: F401
 
     root = Path(".").absolute()
     filterset = FilterSet().is_not_hidden()

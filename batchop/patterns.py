@@ -135,7 +135,6 @@ _size_unit_pattern = re.compile(
 class SizeUnit(BasePattern):
     def test(self, token: str) -> Optional[WordMatch]:
         # TODO: allow space in between size and unit
-        token_lower = token.lower()
         m = _size_unit_pattern.match(token)
         if m is None:
             return None
